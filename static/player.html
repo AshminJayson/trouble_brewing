@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1E3A32">
+<meta name="theme-color" content="#221A2A">
 <title>Trouble Brewing</title>
 <link rel="stylesheet" href="/static/theme.css">
 <style>
   main { max-width: 30rem; margin: 0 auto; padding: 1rem 1.1rem 3rem; }
 
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 1.4rem; }
-  .top h1 { font-size: var(--t-lg); font-style: italic; color: var(--accent-text); }
+  .top h1 { font-size: var(--t-xl); color: var(--accent-text); }
   .top .when { font-size: var(--t-sm); color: var(--on-felt-dim); text-align: right; }
 
   section { margin-top: 2rem; }
@@ -32,12 +32,12 @@
   .face.front { transform: rotateY(180deg); }
   .face .token { --size: 15rem; }
   .face .token .char { font-size: var(--t-2xl); }
-  .face.back .token { background: radial-gradient(circle at 38% 30%, #3b5e53, var(--felt-deep)); }
-  .face.back svg { width: 72%; height: 72%; }
+  .face.back .token { background: radial-gradient(circle at 50% 50%, rgba(178, 58, 51, 0.35), transparent 62%), radial-gradient(circle at 38% 30%, #3B5446, var(--leather) 60%, #182620); }
+  .face.back svg { width: 84%; height: 84%; }
   .hero .token.blank .char { font-size: var(--t-lg); padding: 0 1.5rem; }
   .hero .hint { margin-top: 0.9rem; color: var(--on-felt-dim); font-size: var(--t-sm); }
   .ability { margin: 1rem 0 0; max-width: 26rem; text-align: left; }
-  .ability .team { font-family: var(--display); font-style: italic; font-size: var(--t-lg); }
+  .ability .team { font-family: var(--display); font-size: var(--t-lg); }
   .ability p { margin: 0.3rem 0 0; }
 
   .call {
@@ -48,7 +48,7 @@
 
   /* --- slips of paper from the storyteller --- */
   .slip { margin: 0 0 0.7rem; padding: 0.8rem 1rem; border-radius: 4px; white-space: pre-wrap; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
-  .slip .when { display: block; font-family: var(--display); font-style: italic; color: var(--ink-soft); font-size: var(--t-sm); }
+  .slip .when { display: block; font-family: var(--display); color: var(--ink-soft); font-size: var(--t-sm); }
   .slip.ask { border-left: 5px solid var(--brass); white-space: normal; }
   .picks { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.8rem 0; }
   .pick { border: 1px solid var(--ink-soft); background: transparent; border-radius: 999px; padding: 0.35em 0.9em; cursor: pointer; font-family: var(--display); font-size: var(--t-md); }
@@ -85,7 +85,9 @@
   details.almanac summary { cursor: pointer; font-family: var(--display); font-size: var(--t-xl); }
   .almanac h3 { font-size: var(--t-lg); margin: 1rem 0 0.3rem; color: var(--accent-text); }
   .almanac dl { margin: 0; }
-  .almanac dt { font-family: var(--display); font-size: var(--t-md); margin-top: 0.5rem; }
+  .almanac dt { font-family: var(--display); font-size: var(--t-lg); margin-top: 0.7rem; display: flex; align-items: center; gap: 0.45rem; }
+  .almanac dt .glyph { width: 1.5em; height: 1.5em; }
+  .almanac dd { padding-left: calc(1.5em + 0.45rem); }
   .almanac dd { margin: 0; color: var(--on-felt-dim); font-size: var(--t-sm); }
   .err { color: #ffb4a8; margin-top: 0.6rem; }
   body.day .err { color: var(--oxblood); }
@@ -104,14 +106,17 @@ let lastBuzz = localStorage.getItem("tb_buzz");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const team = type => (type === "minion" || type === "demon") ? "evil" : "good";
 const tone = type => type === "outsider" ? "outsider" : team(type);
+const glyph = id => `<span class="glyph" style="--icon:url(/static/icons/${id}.svg)"></span>`;
 const TYPE_LABEL = {townsfolk: "Townsfolk", outsider: "Outsider", minion: "Minion", demon: "Demon"};
 
-const CLOCK = `<svg viewBox="0 0 100 100" aria-hidden="true">
-  <circle cx="50" cy="50" r="44" fill="none" stroke="#D6AE62" stroke-width="2"/>
-  ${[...Array(12).keys()].map(i => `<line x1="50" y1="9" x2="50" y2="${i % 3 ? 14 : 18}" stroke="#D6AE62" stroke-width="${i % 3 ? 1.5 : 3}" transform="rotate(${i * 30} 50 50)"/>`).join("")}
-  <line x1="50" y1="50" x2="50" y2="24" stroke="#EFE5CC" stroke-width="3.5" stroke-linecap="round"/>
-  <line x1="50" y1="50" x2="68" y2="58" stroke="#EFE5CC" stroke-width="2.5" stroke-linecap="round"/>
-  <circle cx="50" cy="50" r="3" fill="#D6AE62"/></svg>`;
+// five-leaf clover: the grimoire cover a hidden character sits behind
+const LEAF = "M50 50 C40 42 30 33 36 22 C41 13 50 16 50 25 C50 16 59 13 64 22 C70 33 60 42 50 50 Z";
+const EMBLEM = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <circle cx="50" cy="50" r="46" fill="none" stroke="#E0962F" stroke-width="1.2"/>
+  <circle cx="50" cy="50" r="42" fill="none" stroke="#E0962F" stroke-width="0.6" stroke-dasharray="1.5 2.5"/>
+  ${[...Array(5).keys()].map(i => `<path d="${LEAF}" fill="#22332A" stroke="#F5BC55" stroke-width="1.4" transform="rotate(${i * 72} 50 50)"/>
+    <path d="M50 44 L50 27" stroke="#B23A33" stroke-width="0.9" transform="rotate(${i * 72} 50 50)"/>`).join("")}
+  <circle cx="50" cy="50" r="3.2" fill="#F5BC55"/></svg>`;
 
 async function api(path, body) {
   const res = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
@@ -234,8 +239,8 @@ function hero(me) {
   return `<div class="hero">
     <button class="flip ${revealed ? "open" : ""}" onclick="flip()" aria-label="${revealed ? "Hide" : "Show"} my character">
       <div class="inner">
-        <div class="face back"><div class="token">${CLOCK}</div></div>
-        <div class="face front"><div class="token ${c}"><span class="char">${revealed ? esc(r.name) : ""}</span></div></div>
+        <div class="face back"><div class="token">${EMBLEM}</div></div>
+        <div class="face front"><div class="token ${c}"><span class="char">${revealed ? glyph(r.id) + esc(r.name) : ""}</span></div></div>
       </div>
     </button>
     <div class="hint">${revealed ? "Tap the token to hide it" : "Shield your screen, then tap to see your character"}</div>
@@ -276,14 +281,24 @@ function ring(s, me) {
 
 function almanac() {
   const groups = ["townsfolk", "outsider", "minion", "demon"].map(t => `<h3>${TYPE_LABEL[t]}</h3><dl>${
-    Object.values(chars).filter(c => c.type === t).map(c => `<dt>${esc(c.name)}</dt><dd>${esc(c.summary)}</dd>`).join("")}</dl>`).join("");
+    Object.entries(chars).filter(([, c]) => c.type === t).map(([id, c]) => `<dt class="${tone(c.type)}-text">${glyph(id)}${esc(c.name)}</dt><dd>${esc(c.summary)}</dd>`).join("")}</dl>`).join("");
   return `<section><details class="almanac" ${almanacOpen ? "open" : ""} ontoggle="almanacOpen = this.open"><summary>Every character in this script</summary>${groups}</details></section>`;
 }
 
 function setDaylight(phase) {
   const night = phase === "night";
   document.body.classList.toggle("day", !night);
-  document.querySelector('meta[name="theme-color"]').content = night ? "#1E3A32" : "#EFE5CC";
+  document.querySelector('meta[name="theme-color"]').content = night ? "#221A2A" : "#E9DCBE";
+}
+
+// shrink character names that would spill past the seal's rim
+function fitNames(root) {
+  root.querySelectorAll(".token .char").forEach(c => {
+    c.style.fontSize = "";
+    const maxH = c.parentElement.clientHeight * 0.7;
+    let fs = parseFloat(getComputedStyle(c).fontSize);
+    while ((c.scrollWidth > c.clientWidth || c.offsetHeight > maxH) && fs > 6) c.style.fontSize = `${fs -= 0.5}px`;
+  });
 }
 
 function render() {
@@ -319,6 +334,7 @@ function render() {
   }
   html += almanac();
   $app.innerHTML = html;
+  fitNames($app);
 }
 
 api("/api/characters").then(c => { chars = c; render(); });

@@ -47,6 +47,6 @@ Tap any token during play to kill, revive, poison, send a private message or cha
 - `static/` phone page, Storyteller page, theme and bundled fonts
 - `test_game.py` rule tests: `uv run --with pytest pytest -q`
 - `trouble-brewing-almanac.pdf` player almanac for the script, by Rithwik aka BlazeReceptor
-- `static/fonts/OFL-*.txt` licences for the bundled IM Fell English and Alegreya Sans fonts
+- `static/fonts/OFL-*.txt` licences for the bundled Grenze Gotisch and Alegreya Sans fonts
 
 Game state is in memory: restarting the server ends the game.

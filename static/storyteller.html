@@ -13,7 +13,7 @@
   /* --- table side --- */
   .table { padding: 1.2rem 1.5rem; display: flex; flex-direction: column; }
   .table header { display: flex; align-items: baseline; gap: 1rem; }
-  .table header h1 { font-size: var(--t-xl); font-style: italic; color: var(--accent-text); }
+  .table header h1 { font-size: var(--t-2xl); color: var(--accent-text); }
   .table header span { color: var(--on-felt-dim); font-size: var(--t-sm); }
   .square {
     container-type: size;
@@ -22,7 +22,10 @@
     aspect-ratio: 1;
     margin: 0.5rem auto 0;
   }
-  .square::before { content: ""; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid var(--felt-line); }
+  /* spell circle under the seats */
+  .square::before { content: ""; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid rgba(245, 188, 85, 0.4); box-shadow: 0 0 0 7px transparent, 0 0 0 8px rgba(245, 188, 85, 0.16), inset 0 0 80px rgba(143, 211, 166, 0.07); pointer-events: none; }
+  .square::after { content: ""; position: absolute; inset: 14%; border-radius: 50%; border: 1px dashed rgba(245, 188, 85, 0.2); pointer-events: none; }
+  .spot, .center { z-index: 1; }
   .spot { position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; text-align: center; }
   .spot .token { cursor: pointer; border: 0; }
   .square.seating .spot .token { cursor: grab; touch-action: none; }
@@ -44,7 +47,8 @@
   .inspector h3 { font-size: var(--t-xl); display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
   .inspector .x { background: none; border: 0; cursor: pointer; color: var(--ink-soft); font-size: var(--t-lg); line-height: 1; }
   .inspector { max-height: 80cqmin; overflow-y: auto; }
-  .inspector .role { font-family: var(--display); font-size: var(--t-lg); }
+  .inspector .role { font-family: var(--display); font-size: var(--t-lg); display: flex; align-items: center; gap: 0.4rem; }
+  .inspector .role .glyph { width: 1.6em; height: 1.6em; }
   .details { display: grid; gap: 0.3rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--parchment-dim); }
   .details .kind { font-size: var(--t-sm); color: var(--ink-soft); }
   .center .details p { margin: 0; font-size: var(--t-sm); line-height: 1.4; color: var(--ink); }
@@ -64,7 +68,7 @@
   .paper select, .paper input, .paper textarea { background: #fff8e6; border: 1px solid var(--parchment-dim); border-radius: 8px; padding: 0.35em 0.55em; color: var(--ink); }
   .paper textarea { width: 100%; min-height: 4.5rem; resize: vertical; }
   .paper input[type=checkbox] { accent-color: var(--ink); }
-  .warn { margin: 0.4rem 0; padding: 0.4rem 0.7rem; border-left: 4px solid var(--oxblood); background: rgba(158, 42, 47, 0.08); }
+  .warn { margin: 0.4rem 0; padding: 0.4rem 0.7rem; border-left: 4px solid var(--oxblood); background: rgba(178, 58, 51, 0.08); }
   .note { font-size: var(--t-sm); color: var(--ink-soft); margin: 0.3rem 0; }
 
   /* night order: a genuine sequence, so it is numbered */
@@ -98,7 +102,7 @@
   details.log ol { padding-left: 1.2rem; font-size: var(--t-sm); color: var(--ink-soft); max-height: 18rem; overflow-y: auto; }
   details.tools { margin-top: 1.2rem; }
 
-  .inbox { margin: 0 0 1.4rem; padding: 0.8rem 1rem; border: 1px solid var(--brass); border-radius: 10px; background: rgba(184, 144, 74, 0.1); }
+  .inbox { margin: 0 0 1.4rem; padding: 0.8rem 1rem; border: 1px solid var(--brass); border-radius: 10px; background: rgba(224, 150, 47, 0.12); }
   .inbox summary { cursor: pointer; font-family: var(--display); font-size: var(--t-lg); }
   .inbox .notes { list-style: none; padding: 0; margin: 0.5rem 0; max-height: 16rem; overflow-y: auto; }
   .inbox .notes li { padding: 0.45rem 0; border-top: 1px solid var(--parchment-dim); }
@@ -141,6 +145,7 @@ const HINTS = {
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const cname = id => C[id]?.name ?? "";
+const glyph = id => id ? `<span class="glyph" style="--icon:url(/static/icons/${id}.svg)"></span>` : "";
 const team = id => ["minion", "demon"].includes(C[id]?.type) ? "evil" : "good";
 const tone = id => C[id]?.type === "outsider" ? "outsider" : team(id);
 const pname = pid => S.players.find(p => p.pid === pid)?.name ?? "";
@@ -189,12 +194,29 @@ const playerOpts = (filter = () => true, chosen, blank) =>
 const charOpts = (chosen, type) =>
   opts(Object.entries(C).filter(([, c]) => !type || c.type === type).map(([id, c]) => [id, c.name]), chosen);
 
+// legal bluffs only; the saved pick stays listed so a now-illegal one is visible, not silently swapped
+function bluffOpts(chosen) {
+  const held = new Set(S.players.flatMap(p => [p.character, p.believed]));
+  return opts(Object.entries(C).filter(([id, c]) => id === chosen || (["townsfolk", "outsider"].includes(c.type) && !held.has(id)))
+    .map(([id, c]) => [id, c.name]), chosen);
+}
+
 function currentStep() {
   if (S.phase !== "night") return -1;
   return S.steps.findIndex(s => !s.done && s.applies);
 }
 
 // --- rendering ---
+
+// shrink character names that would spill past the seal's rim
+function fitNames(root) {
+  root.querySelectorAll(".token .char").forEach(c => {
+    c.style.fontSize = "";
+    const maxH = c.parentElement.clientHeight * 0.7;
+    let fs = parseFloat(getComputedStyle(c).fontSize);
+    while ((c.scrollWidth > c.clientWidth || c.offsetHeight > maxH) && fs > 6) c.style.fontSize = `${fs -= 0.5}px`;
+  });
+}
 
 function render() {
   // a re-render mid-drag would drop the token being moved
@@ -206,6 +228,7 @@ function render() {
   const unread = (S.inbox || []).filter(n => !n.read).length;
   el("sub").textContent = (S.players.length ? `${alive} of ${S.players.length} alive` : "") + (unread ? `, ${unread} new ${unread === 1 ? "note" : "notes"}` : "");
   el("square").innerHTML = square();
+  fitNames(el("square"));
   el("square").classList.toggle("seating", ["lobby", "setup"].includes(S.phase));
   el("ledger").innerHTML = inbox() + ({lobby, setup, night, day, over})[S.phase]() + tools() + logBlock();
   for (const [id, v] of Object.entries(dirty)) {
@@ -233,7 +256,7 @@ function square() {
     if (!p.alive) rems.push(`<span class="rem vote">${p.ghost_vote ? "vote left" : "no vote"}</span>`);
     if ((S.inbox || []).some(n => n.pid === p.pid && !n.read)) rems.push(`<span class="rem note">note</span>`);
     const face = p.character
-      ? `<span class="char">${esc(cname(p.character))}${p.believed !== p.character ? `<small>thinks ${esc(cname(p.believed))}</small>` : ""}</span>`
+      ? `<span class="char">${glyph(p.character)}${esc(cname(p.character))}${p.believed !== p.character ? `<small>thinks ${esc(cname(p.believed))}</small>` : ""}</span>`
       : `<span class="char"></span>`;
     const cls = [p.character ? tone(p.character) : "blank", p.alive ? "" : "dead", lit.has(p.pid) ? "lit" : ""].join(" ");
     return `<div class="spot ${selected === p.pid ? "selected" : ""}" style="left:${left}%;top:${top}%">
@@ -323,7 +346,7 @@ function roleDetails(p) {
   if (S.protected === p.pid) status.push("protected by the Monk");
   if (S.master === p.pid) status.push("the Butler's Master");
   if (S.red_herring === p.pid) status.push("Fortune Teller's red herring");
-  let h = `<div class="details"><div class="role ${tone(p.character)}-text">${esc(c.name)}</div>
+  let h = `<div class="details"><div class="role ${tone(p.character)}-text">${glyph(p.character)}${esc(c.name)}</div>
     <div class="kind">${KIND[c.type]}, ${team(p.character)} team</div>
     <p>${esc(c.ability)}</p>`;
   if (p.believed && p.believed !== p.character) {
@@ -387,10 +410,11 @@ function setup() {
     <p class="lede">${counts}. Tap any token to swap its character. Nobody sees anything until you start.</p>
     ${S.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("")}
     <label class="field"><span>Fortune Teller's red herring</span><select id="rh">${playerOpts(p => team(p.character) === "good", S.red_herring)}</select></label>
-    <div class="field"><span>Demon bluffs</span><div class="line">${[0, 1, 2].map(i => `<select id="bluff-${i}">${charOpts(S.bluffs[i])}</select>`).join("")}</div></div>
+    <div class="field"><span>Demon bluffs: good characters nobody holds</span><div class="line">${[0, 1, 2].map(i => `<select id="bluff-${i}" aria-label="Bluff ${i + 1}">${bluffOpts(S.bluffs[i])}</select>`).join("")}</div>
+      ${S.bluff_problems.map(w => `<div class="warn">${esc(w)}</div>`).join("")}</div>
     <button class="btn quiet small" onclick="act('set_setup', {red_herring: val('rh'), bluffs: [0,1,2].map(i => val('bluff-'+i))}, 'bluff-')">Save red herring and bluffs</button>
     <h3>Begin</h3>
-    <div class="line"><button class="btn" onclick="act('start_game')">Start the first night</button>
+    <div class="line"><button class="btn" ${S.bluff_problems.length ? "disabled" : ""} onclick="act('start_game')">Start the first night</button>
       <button class="btn quiet" onclick="act('deal', {}, 'bluff-')">Deal again</button></div>`;
 }
 
@@ -517,6 +541,7 @@ function logBlock() {
 
 api("/api/characters").then(c => { C = c; lastVersion = -1; poll(); });
 setInterval(poll, 1200);
+addEventListener("resize", () => fitNames(el("square")));
 </script>
 </body>
 </html>

@@ -211,9 +211,39 @@ class Game:
         """Set the Fortune Teller red herring (a pid) and the Demon's three bluffs (character ids)."""
         self._require("setup")
         self.get(red_herring)
-        if len(bluffs) != 3 or any(b not in CHARACTERS for b in bluffs):
-            raise GameError("Pick exactly three bluff characters")
+        problems = self.bluff_problems(bluffs)
+        if problems:
+            raise GameError(problems[0])
         self.red_herring, self.bluffs = red_herring, bluffs
+
+    def bluff_problems(self, bluffs: list[str]) -> list[str]:
+        """Reasons the Demon's bluffs are illegal for the current seating; empty when they are fine.
+
+        Algorithm: require exactly three known character ids, all different, each on the good team
+        (Townsfolk or Outsider), none held by a player, and none the Drunk believes they are (the
+        Drunk openly claims that character, so the Demon would be caught out by a double claim).
+
+        Args:
+            bluffs (list[str]): character ids proposed as bluffs.
+
+        Returns:
+            list[str]: one sentence per problem, in the order checked.
+        """
+        if len(bluffs) != 3 or any(b not in CHARACTERS for b in bluffs):
+            return ["Pick exactly three bluff characters"]
+        problems = []
+        if len(set(bluffs)) != 3:
+            problems.append("The three Demon bluffs must be different characters")
+        evil = sorted({info.char_name(b) for b in bluffs if not is_good(b)})
+        if evil:
+            problems.append(f"Demon bluffs must be good characters, not {', '.join(evil)}")
+        in_play = sorted({info.char_name(b) for b in bluffs if any(p.character == b for p in self.players)})
+        if in_play:
+            problems.append(f"Demon bluffs must not be in play: {', '.join(in_play)}")
+        drunk = next((p for p in self.players if p.character == "drunk"), None)
+        if drunk and drunk.believed in bluffs:
+            problems.append(f"The Drunk believes they are the {info.char_name(drunk.believed)}, so it cannot be a bluff")
+        return problems
 
     def setup_warnings(self) -> list[str]:
         """Soft problems with the current setup; the Storyteller may start anyway."""
@@ -228,8 +258,6 @@ class Game:
         dupes = {c for c in chars if chars.count(c) > 1}
         if dupes:
             warnings.append("Duplicate characters: " + ", ".join(info.char_name(c) for c in dupes))
-        if any(b in chars for b in self.bluffs):
-            warnings.append("A Demon bluff is actually in play")
         drunk = next((p for p in self.players if p.character == "drunk"), None)
         if drunk and drunk.believed in chars:
             warnings.append("The Drunk believes they are a character that is in play")
@@ -242,6 +270,7 @@ class Game:
 
         Refuses duplicate characters, counting the Drunk's believed character: two holders of one
         character would share a single night step, so only one of them would ever be prompted.
+        Refuses illegal Demon bluffs, since character changes after the deal can put a bluff in play.
         """
         self._require("setup")
         if not any(CHARACTERS[p.character]["type"] == DEMON for p in self.players):
@@ -254,6 +283,9 @@ class Game:
         if drunk and drunk.believed in chars:
             raise GameError(f"The Drunk must believe they are a Townsfolk not in play, "
                             f"and the {info.char_name(drunk.believed)} is in play")
+        problems = self.bluff_problems(self.bluffs)
+        if problems:
+            raise GameError(problems[0])
         self.counts = {t: sum(CHARACTERS[p.character]["type"] == t for p in self.players)
                        for t in (TOWNSFOLK, OUTSIDER, MINION, DEMON)}
         self._log("Game started: " + ", ".join(f"{p.name}={info.char_name(p.character)}" for p in self.players))
@@ -804,6 +836,7 @@ class Game:
             "queued": {pid: texts for pid, texts in self.queued.items()}, "second_round_done": self.second_round_done,
             "inbox": self.inbox, "phones_done": list(self.phones_done()),
             "warnings": self.setup_warnings(), "log": self.log,
+            "bluff_problems": self.bluff_problems(self.bluffs) if self.phase == "setup" else [],
         }
 
 

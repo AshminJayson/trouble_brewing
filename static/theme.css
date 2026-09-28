@@ -1,24 +1,26 @@
 @import url(/static/fonts/fonts.css);
 
+/* night: plum sky, moon amber, castle greens; day: moonlit grimoire pages */
 :root {
-  --felt: #1E3A32;
-  --felt-deep: #16302A;
-  --felt-line: #2E5247;
-  --parchment: #EFE5CC;
-  --parchment-dim: #D9CCAA;
-  --ink: #2B2118;
-  --ink-soft: #6B5B45;
-  --lapis: #2F5C9A;
-  --oxblood: #9E2A2F;
-  --brass: #B8904A;
-  --brass-bright: #D6AE62;
-  --moss: #3E7431;
-  --poison: #6E3F7C;
-  --on-felt: #E4DCC6;
-  --on-felt-dim: #9FB3A8;
+  --felt: #221A2A;
+  --felt-deep: #150F1B;
+  --felt-line: #45384F;
+  --parchment: #F3E5C4;
+  --parchment-dim: #DCC39A;
+  --ink: #1F1A24;
+  --ink-soft: #625566;
+  --lapis: #2A6B78;
+  --oxblood: #B23A33;
+  --brass: #E0962F;
+  --brass-bright: #F5BC55;
+  --moss: #3F6F34;
+  --poison: #6E3A7A;
+  --leather: #2C4236;
+  --on-felt: #F1E4CC;
+  --on-felt-dim: #A898AC;
   --accent-text: var(--brass-bright);
 
-  --display: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+  --display: 'Grenze Gotisch', 'Iowan Old Style', Georgia, serif;
   --body: 'Alegreya Sans', 'Gill Sans', 'Trebuchet MS', sans-serif;
 
   /* type scale, ratio 1.25 */
@@ -43,45 +45,51 @@ body {
   line-height: 1.45;
   color: var(--on-felt);
   background:
-    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.05), transparent 65%),
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245, 188, 85, 0.13), transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 110%, rgba(143, 211, 166, 0.12), transparent 70%),
     var(--felt);
   transition: background-color 1.2s ease, color 1.2s ease;
 }
 
-/* day: the same table by daylight; night keeps the dark felt */
 body.day {
-  --felt: #EFE5CC;
-  --felt-deep: #E2D4B0;
-  --felt-line: #CDBD95;
-  --parchment: #FBF6E8;
-  --on-felt: #2B2118;
-  --on-felt-dim: #6B5B45;
-  --accent-text: #7F5F24;
+  --felt: #E9DCBE;
+  --felt-deep: #DCCBA6;
+  --felt-line: #C4AE85;
+  --parchment: #FBF3E0;
+  --on-felt: #1F1A24;
+  --on-felt-dim: #625566;
+  --accent-text: #8A5210;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 110%, rgba(138, 82, 16, 0.10), transparent 70%),
+    var(--felt);
 }
 
-h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; line-height: 1.15; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; line-height: 1.1; letter-spacing: 0.01em; }
 
 button, select, input, textarea { font: inherit; color: inherit; }
 
 :focus-visible { outline: 2px solid var(--brass-bright); outline-offset: 2px; }
 
-/* --- buttons --- */
+/* --- buttons: gold-foil clasp --- */
 .btn {
   border: 0;
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 0.5em 1.1em;
-  background: var(--brass);
+  background: linear-gradient(180deg, var(--brass-bright), var(--brass));
   color: var(--ink);
   font-weight: 700;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 .btn:hover { background: var(--brass-bright); }
-.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
 .btn.quiet { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px currentColor; font-weight: 500; }
-.btn.quiet:hover { background: rgba(127, 110, 80, 0.15); }
+.btn.quiet:hover { background: rgba(224, 150, 47, 0.16); }
 .btn.small { padding: 0.25em 0.8em; font-size: var(--t-sm); }
 
-/* --- character token --- */
+/* --- character token: a grimoire seal --- */
 .token {
   --size: 92px;
   position: relative;
@@ -91,20 +99,28 @@ button, select, input, textarea { font: inherit; color: inherit; }
   display: grid;
   place-items: center;
   text-align: center;
-  padding: 10%;
+  padding: 12%;
   color: var(--ink);
-  background: radial-gradient(circle at 38% 30%, #F8F0DB, var(--parchment) 55%, var(--parchment-dim));
-  box-shadow: 0 0 0 3px var(--felt-deep), 0 0 0 4px rgba(214, 174, 98, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
+  background: radial-gradient(circle at 38% 30%, #FDF5E2, var(--parchment) 55%, var(--parchment-dim));
+  box-shadow:
+    inset 0 0 0 calc(var(--size) * 0.04) rgba(224, 150, 47, 0.55),
+    inset 0 0 0 calc(var(--size) * 0.05) rgba(31, 26, 36, 0.12),
+    0 0 0 3px var(--felt-deep),
+    0 0 0 4px rgba(245, 188, 85, 0.45),
+    0 6px 14px rgba(0, 0, 0, 0.45);
   font-family: var(--display);
-  font-size: calc(var(--size) * 0.15);
-  line-height: 1.05;
+  font-weight: 700;
+  font-size: calc(var(--size) * 0.16);
+  line-height: 1;
 }
+/* inset past the rim; names are shrunk to fit this box */
+.token .char { display: block; width: 100%; padding: 0 4%; }
 .token.good .char { color: var(--lapis); }
 .token.outsider .char { color: var(--moss); }
 .token.evil .char { color: var(--oxblood); }
-.token.blank .char { color: var(--ink-soft); font-style: italic; }
-.token.dead { filter: grayscale(0.9) brightness(0.8); }
-/* shroud: the black banner laid over a dead player's token */
+.token.blank .char { color: var(--ink-soft); font-family: var(--body); font-weight: 500; }
+.token.dead { filter: grayscale(0.9) brightness(0.75); }
+/* shroud over a dead player's token */
 .token.dead::after {
   content: "";
   position: absolute;
@@ -113,18 +129,29 @@ button, select, input, textarea { font: inherit; color: inherit; }
   width: 24%;
   height: 34%;
   transform: translateX(-50%);
-  background: #1a1a1a;
+  background: #150F1B;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
-  opacity: 0.9;
+  opacity: 0.92;
 }
-.token.lit { box-shadow: 0 0 0 3px var(--brass-bright), 0 0 22px 6px rgba(214, 174, 98, 0.55); }
+/* character glyph: almanac icon as a mask, tinted by team colour */
+.glyph {
+  display: block;
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.token .glyph { width: calc(var(--size) * 0.4); height: calc(var(--size) * 0.4); margin: 0 auto calc(var(--size) * 0.02); }
+.token.lit { box-shadow: 0 0 0 3px var(--brass-bright), 0 0 22px 6px rgba(245, 188, 85, 0.55); }
 
 .nameplate {
   display: inline-block;
   margin-top: 6px;
   padding: 1px 10px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--felt-deep);
+  border: 1px solid var(--felt-line);
   color: var(--on-felt);
   font-size: var(--t-sm);
   font-weight: 500;
@@ -148,17 +175,19 @@ button, select, input, textarea { font: inherit; color: inherit; }
 .rem.herring { background: var(--oxblood); }
 .rem.vote { background: var(--parchment-dim); color: var(--ink); }
 
-/* --- paper surfaces --- */
+/* --- grimoire pages --- */
 .paper {
   background: var(--parchment);
   color: var(--ink);
-  background-image: radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.5), transparent 60%);
+  background-image:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(138, 82, 16, 0.12), transparent 55%);
 }
 
-/* team colours: light on night felt, deep on paper and by day */
-.good-text { color: #A9C6EE; }
-.outsider-text { color: #A8D69B; }
-.evil-text { color: #F09A94; }
+/* team colours: light on night robe, deep on paper and by day */
+.good-text { color: #8CCBD3; }
+.outsider-text { color: #A6DBA0; }
+.evil-text { color: #F59482; }
 .paper .good-text, body.day .good-text { color: var(--lapis); }
 .paper .outsider-text, body.day .outsider-text { color: var(--moss); }
 .paper .evil-text, body.day .evil-text { color: var(--oxblood); }

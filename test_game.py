@@ -6,6 +6,7 @@ import pytest
 
 import info
 from game import Game, GameError
+from roles import CHARACTERS, is_good
 
 NAMES = ["Asha", "Ben", "Chen", "Dev", "Ema", "Finn", "Gita", "Hari", "Ines"]
 
@@ -23,6 +24,8 @@ def make(chars: list[str], seed: int = 1) -> Game:
         if p.character == "drunk":
             g.set_character(p.pid, "drunk")
     g.red_herring = next(p.pid for p in g.players if p.character not in ("imp", "poisoner", "spy", "scarlet_woman", "baron"))
+    held = {x for p in g.players for x in (p.character, p.believed)}
+    g.bluffs = [c for c in CHARACTERS if is_good(c) and c not in held][:3]
     g.start_game()
     return g
 
@@ -424,3 +427,51 @@ def test_unanswered_real_choice_survives_second_round():
     to_night2(g)
     g.resolve(step(g, "imp"), [p(g, "Ema").pid])
     assert p(g, "Chen").prompt["kind"] == "choose"
+
+
+# --- demon bluffs ---
+
+def dealt(n: int = 7, seed: int = 3) -> Game:
+    """A freshly dealt game in setup, not yet started."""
+    g = Game(random.Random(seed))
+    for name in NAMES[:n]:
+        g.add_player(name)
+    g.deal()
+    return g
+
+
+def test_dealt_bluffs_are_legal():
+    for seed in range(50):
+        g = dealt(seed=seed)
+        assert g.bluff_problems(g.bluffs) == []
+
+
+@pytest.mark.parametrize("pick, message", [
+    (lambda g, free: [free[0], free[0], free[1]], "different"),
+    (lambda g, free: [free[0], free[1], "baron"], "good characters"),
+    (lambda g, free: [free[0], free[1], next(p.character for p in g.players if is_good(p.character))], "in play"),
+    (lambda g, free: [free[0], free[1], "nobody"], "exactly three"),
+    (lambda g, free: free[:2], "exactly three"),
+])
+def test_illegal_bluffs_rejected(pick, message):
+    g = dealt()
+    held = {p.character for p in g.players}
+    free = [c for c in CHARACTERS if is_good(c) and c not in held]
+    with pytest.raises(GameError, match=message):
+        g.set_setup(g.red_herring, pick(g, free))
+
+
+def test_drunk_belief_cannot_be_a_bluff():
+    g = dealt()
+    g.set_character(g.players[0].pid, "drunk")
+    believed = g.players[0].believed
+    with pytest.raises(GameError, match="Drunk believes"):
+        g.set_setup(g.red_herring, [believed] + [b for b in g.bluffs if b != believed][:2])
+
+
+def test_start_refuses_bluff_put_in_play_after_saving():
+    g = dealt()
+    g.set_character(g.players[0].pid, g.bluffs[0])
+    assert g.storyteller_view()["bluff_problems"]
+    with pytest.raises(GameError, match="must not be in play"):
+        g.start_game()
