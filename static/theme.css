@@ -51,17 +51,16 @@ body {
   transition: background-color 1.2s ease, color 1.2s ease;
 }
 
+/* day: the castle's sunlit verdigris stone under a warm sky */
 body.day {
-  --felt: #E9DCBE;
-  --felt-deep: #DCCBA6;
-  --felt-line: #C4AE85;
-  --parchment: #FBF3E0;
-  --on-felt: #1F1A24;
-  --on-felt-dim: #625566;
-  --accent-text: #8A5210;
+  --felt: #1B2B27;
+  --felt-deep: #12201C;
+  --felt-line: #34504A;
+  --on-felt-dim: #A7B9AE;
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255, 255, 255, 0.55), transparent 70%),
-    radial-gradient(ellipse 70% 60% at 50% 110%, rgba(138, 82, 16, 0.10), transparent 70%),
+    radial-gradient(ellipse 90% 55% at 50% -5%, rgba(245, 188, 85, 0.24), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 85% 10%, rgba(216, 106, 85, 0.14), transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 110%, rgba(143, 211, 166, 0.12), transparent 70%),
     var(--felt);
 }
 
@@ -184,13 +183,13 @@ button, select, input, textarea { font: inherit; color: inherit; }
     radial-gradient(ellipse at 100% 100%, rgba(138, 82, 16, 0.12), transparent 55%);
 }
 
-/* team colours: light on night robe, deep on paper and by day */
+/* team colours: light on the dark table, deep on paper */
 .good-text { color: #8CCBD3; }
 .outsider-text { color: #A6DBA0; }
 .evil-text { color: #F59482; }
-.paper .good-text, body.day .good-text { color: var(--lapis); }
-.paper .outsider-text, body.day .outsider-text { color: var(--moss); }
-.paper .evil-text, body.day .evil-text { color: var(--oxblood); }
+.paper .good-text { color: var(--lapis); }
+.paper .outsider-text { color: var(--moss); }
+.paper .evil-text { color: var(--oxblood); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }

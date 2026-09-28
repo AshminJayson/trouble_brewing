@@ -65,9 +65,9 @@ class NoteBody(BaseModel):
 
 
 class TapBody(BaseModel):
-    """POST /api/tap payload: the player's secret token and the button they pressed."""
+    """POST /api/tap payload: the player's secret token and the icons they tapped, in order."""
     token: str
-    option: str
+    sequence: list[str]
 
 
 class ChooseBody(BaseModel):
@@ -145,7 +145,7 @@ def create_app(game: Game, st_key: str, join_url: str) -> FastAPI:
     @app.post("/api/join")
     def join(body: JoinBody) -> dict:
         with lock:
-            token = game.add_player(body.name).token
+            token = game.add_player(body.name, phone=True).token
             game.version += 1
             return {"token": token}
 
@@ -159,7 +159,7 @@ def create_app(game: Game, st_key: str, join_url: str) -> FastAPI:
     @app.post("/api/tap")
     def tap(body: TapBody) -> dict:
         with lock:
-            game.tap(body.token, body.option)
+            game.tap(body.token, body.sequence)
             game.version += 1
             return {}
 

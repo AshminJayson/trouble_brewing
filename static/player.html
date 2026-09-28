@@ -68,7 +68,17 @@
   .pick[aria-pressed="true"] { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
   .pick.dead { opacity: 0.6; }
   .slip .miss { margin: 0; color: var(--oxblood); font-weight: 700; }
-  .picks.taps .pick { flex: 1; font-family: var(--body); font-weight: 700; letter-spacing: 0.2em; padding: 0.6em 0; }
+  /* tap challenge: the three to find, in order, above the six to pick from */
+  .seq { list-style: none; display: flex; justify-content: center; gap: 0.7rem; margin: 0.8rem 0; padding: 0; counter-reset: n; }
+  .seq li { counter-increment: n; position: relative; width: 3.4rem; height: 3.4rem; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: var(--parchment-dim); }
+  .seq li::before { content: counter(n); position: absolute; top: -0.35rem; left: -0.35rem; width: 1.2rem; height: 1.2rem; border-radius: 50%; display: grid; place-items: center; font-size: var(--t-xs); font-weight: 700; background: var(--ink); color: var(--parchment); }
+  .seq li.got { background: var(--brass-bright); }
+  .seq .glyph { width: 2rem; height: 2rem; }
+  .grid6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .grid6 .cell { display: grid; justify-items: center; gap: 0.2rem; padding: 0.6rem 0.2rem 0.45rem; border: 1px solid var(--ink-soft); border-radius: 12px; background: rgba(255, 255, 255, 0.35); color: var(--ink); cursor: pointer; font-size: var(--t-xs); line-height: 1.1; }
+  .grid6 .cell .glyph { width: 2.2rem; height: 2.2rem; }
+  .grid6 .cell:disabled { background: var(--ink); color: var(--parchment); border-color: var(--ink); cursor: default; }
+  .grid6 .cell:disabled span { font-weight: 700; font-size: var(--t-md); }
   .empty { color: var(--on-felt-dim); font-style: italic; }
   textarea.note { width: 100%; min-height: 5rem; padding: 0.7em 0.9em; border-radius: 12px; border: 1px solid var(--felt-line); background: var(--felt-deep); color: var(--on-felt); resize: vertical; }
   .noteactions { display: flex; align-items: center; gap: 0.8rem; margin: 0.6rem 0 1rem; }
@@ -103,8 +113,6 @@
   .almanac dd { padding-left: calc(1.5em + 0.45rem); }
   .almanac dd { margin: 0; color: var(--on-felt-dim); font-size: var(--t-sm); }
   .err { color: #ffb4a8; margin-top: 0.6rem; }
-  body.day .err { color: var(--oxblood); }
-  body.day .seat.dead .dot { color: #C9C0AE; }
 </style>
 </head>
 <body>
@@ -113,7 +121,7 @@
 const $app = document.getElementById("app");
 let token = localStorage.getItem("tb_token");
 let state = null, chars = {}, lastVersion = -1;
-let revealed = false, picks = [], error = "", seen = Number(localStorage.getItem("tb_seen") || 0), hideTimer = null, hideAt = 0, view = "character", heard = "", noteDraft = "", noteSent = false, tapError = "";
+let revealed = false, picks = [], error = "", seen = Number(localStorage.getItem("tb_seen") || 0), hideTimer = null, hideAt = 0, view = "character", heard = "", noteDraft = "", noteSent = false, tapError = "", tapSeq = [], tapKey = "";
 let lastBuzz = localStorage.getItem("tb_buzz");
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -167,14 +175,26 @@ async function join(ev) {
 // tap task: everyone without a real choice taps too, so real choices do not stand out
 function tapTask(p) {
   if (p.answer) return `<div class="slip paper ask"><span class="when">Done</span>Keep your phone close until dawn.</div>`;
+  const key = p.target.join();
+  if (tapKey !== key) { tapKey = key; tapSeq = []; }
+  const name = id => esc(chars[id]?.name ?? id);
   return `<div class="slip paper ask"><span class="when">The Storyteller asks</span>${esc(p.text)}
-    <div class="picks taps">${p.options.map(o => `<button class="pick" onclick="tapOption('${o}')">${o}</button>`).join("")}</div>
+    <ol class="seq">${p.target.map((id, i) => `<li class="${i < tapSeq.length ? "got" : ""}" aria-label="${i + 1}: ${name(id)}">${glyph(id)}</li>`).join("")}</ol>
+    <div class="grid6">${p.options.map(id => {
+      const at = tapSeq.indexOf(id);
+      return `<button class="cell" ${at >= 0 ? "disabled" : ""} onclick="tapIcon('${id}')" aria-label="${name(id)}">${glyph(id)}<span>${at >= 0 ? at + 1 : name(id)}</span></button>`;
+    }).join("")}</div>
     ${tapError ? `<p class="miss">${esc(tapError)}</p>` : ""}</div>`;
 }
 
-async function tapOption(option) {
-  try { await api("/api/tap", {token, option}); tapError = ""; lastVersion = -1; poll(); }
-  catch (e) { tapError = e.message; render(); }
+async function tapIcon(id) {
+  const target = state.me.prompt.target;
+  if (id !== target[tapSeq.length]) { tapSeq = []; tapError = "Not quite. Start again from the first one."; render(); return; }
+  tapSeq = [...tapSeq, id];
+  tapError = "";
+  if (tapSeq.length < target.length) { render(); return; }
+  try { await api("/api/tap", {token, sequence: tapSeq}); lastVersion = -1; poll(); }
+  catch (e) { tapSeq = []; tapError = e.message; render(); }
 }
 
 async function confirmPick() {
@@ -315,7 +335,7 @@ function almanac() {
 function setDaylight(phase) {
   const night = phase === "night";
   document.body.classList.toggle("day", !night);
-  document.querySelector('meta[name="theme-color"]').content = night ? "#221A2A" : "#E9DCBE";
+  document.querySelector('meta[name="theme-color"]').content = night ? "#221A2A" : "#1B2B27";
 }
 
 // shrink character names that would spill past the seal's rim

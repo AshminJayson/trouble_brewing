@@ -24,8 +24,10 @@ If phones cannot connect, allow incoming connections for Python in the laptop's 
 2. **Deal**: a random rules-valid setup for 5-15 players, with the Drunk's fake character, the Fortune
    Teller's red herring and three Demon bluffs. Tap any token to change it, then start.
 3. **Night** (eyes open): every phone buzzes at once. Players with a night choice get it on their phone
-   automatically; everyone else gets a tap task (press the button matching three letters), so every
-   player taps and real choices do not stand out. The ledger counts how many phones are done. Work down the ledger in
+   automatically; everyone else gets a tap challenge (tap three character icons in the order shown), so
+   every player taps and real choices do not stand out. The ledger shows which phones are still going;
+   the second buzz and dawn are refused until every living player with a phone has finished (players
+   seated without a phone are not waited for). Work down the ledger in
    order: *Apply their pick* / *Work out their info* (the truthful answer is filled in), edit if they
    are drunk or poisoned, then *Hold until dawn*. Applying the Imp's kill buzzes every phone a second
    time; a Ravenkeeper killed tonight picks then. Kills, Monk, Soldier, Mayor, star-pass and Scarlet

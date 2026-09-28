@@ -86,6 +86,9 @@
   .stephead span { font-size: var(--t-sm); color: var(--ink-soft); }
   .flag { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 0 0.5rem; border-radius: 999px; background: var(--oxblood); color: var(--parchment); }
   .answer { font-weight: 700; }
+  .phones ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.3rem 0 1rem; }
+  .phones li { padding: 0.1em 0.7em; border-radius: 999px; font-size: var(--t-sm); border: 1px dashed var(--oxblood); color: var(--oxblood); }
+  .phones li.done { border: 1px solid var(--moss); color: var(--moss); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
   .chip { border: 1px solid var(--ink-soft); background: transparent; border-radius: 999px; padding: 0.2em 0.75em; cursor: pointer; color: var(--ink); }
@@ -466,20 +469,24 @@ function night() {
   const cur = currentStep();
   const deaths = S.night_deaths.map(pname);
   const held = Object.values(S.queued).reduce((n, texts) => n + texts.length, 0);
+  const waiting = S.phones.filter(x => !x.done).map(x => x.name);
+  const blocked = waiting.length ? "disabled" : "";
+  const waitNote = waiting.length ? `<p class="note">Waiting for ${esc(waiting.join(", "))}.</p>` : "";
   const round2 = S.night > 1 ? `<h3>Second round</h3>
     ${S.second_round_done
       ? `<p class="note">Every phone has buzzed a second time.</p>`
       : `<p class="note">Applying the Imp's kill buzzes every phone again, and a Ravenkeeper killed tonight gets their prompt. The second round happens every night so it gives nothing away.</p>
-         <button class="btn quiet small" onclick="act('second_round')">Buzz every phone now</button>`}` : "";
+         ${waitNote}<button class="btn quiet small" ${blocked} onclick="act('second_round')">Buzz every phone now</button>`}` : "";
   return `<h2>Night ${S.night}</h2>
-    <p class="lede">Every phone has buzzed. Players with a choice are picking; everyone else has a button to tap. Work down the list as their picks arrive.</p>
-    ${S.phones_done ? `<p class="note"><span class="answer">${S.phones_done[0]} of ${S.phones_done[1]} phones done.</span> Wait for everyone before the next round so nobody is left tapping alone.</p>` : ""}
+    <p class="lede">Every phone has buzzed. Players with a choice are picking; everyone else has a short icon challenge. Work down the list as their picks arrive.</p>
+    ${S.phones.length ? `<div class="phones"><p class="note"><span class="answer">${S.phones_done[0]} of ${S.phones_done[1]} phones done.</span> The second buzz and dawn wait for everyone.</p>
+      <ul>${S.phones.map(x => `<li class="${x.done ? "done" : ""}">${x.done ? "&#10003; " : ""}${esc(x.name)}</li>`).join("")}</ul></div>` : ""}
     ${S.steps.length ? `<ol class="order">${S.steps.map((s, i) => stepItem(s, i, cur)).join("")}</ol>` : `<p class="note">Nobody has anything to do tonight.</p>`}
     ${round2}
     <h3>Dawn</h3>
     <p class="note">${deaths.length ? `${esc(deaths.join(" and "))} will be announced dead.` : "Nobody has died tonight."}
       ${held ? `${held} ${held === 1 ? "message is" : "messages are"} held for dawn.` : ""} Everyone else gets "Nothing to report tonight."</p>
-    <button class="btn" onclick="openStep = null; act('start_day')">Deliver everything and start day ${S.day + 1}</button>`;
+    ${waitNote}<button class="btn" ${blocked} onclick="openStep = null; act('start_day')">Deliver everything and start day ${S.day + 1}</button>`;
 }
 
 function toggleVote(i, pid) {

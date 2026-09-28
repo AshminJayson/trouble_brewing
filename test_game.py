@@ -11,11 +11,11 @@ from roles import CHARACTERS, is_good
 NAMES = ["Asha", "Ben", "Chen", "Dev", "Ema", "Finn", "Gita", "Hari", "Ines"]
 
 
-def make(chars: list[str], seed: int = 1) -> Game:
-    """Seat len(chars) players, force their characters in seat order, and start night 1."""
+def make(chars: list[str], seed: int = 1, phones: bool = False) -> Game:
+    """Seat len(chars) players (joined from phones if phones), force their characters in seat order, start night 1."""
     g = Game(random.Random(seed))
     for n in NAMES[:len(chars)]:
-        g.add_player(n)
+        g.add_player(n, phone=phones)
     g.deal()
     for p, c in zip(g.players, chars):
         g.set_character(p.pid, c)
@@ -212,10 +212,10 @@ def test_chef_counts_adjacent_pairs_around_circle():
 def test_night_start_prompts_every_living_chooser_and_buzzes():
     g = make(["imp", "poisoner", "fortune_teller", "butler", "chef", "saint", "ravenkeeper"])
     assert g.buzz == 1
-    choosers = {x.name for x in g.players if x.prompt["kind"] == "choose"}
+    choosers = {x.name for x in g.players if x.prompt and x.prompt["kind"] == "choose"}
     assert choosers == {"Ben", "Chen", "Dev"}
     to_night2(g)
-    choosers = {x.name for x in g.players if x.prompt["kind"] == "choose"}
+    choosers = {x.name for x in g.players if x.prompt and x.prompt["kind"] == "choose"}
     assert choosers == {"Asha", "Ben", "Chen", "Dev"}
 
 
@@ -243,8 +243,10 @@ def test_imp_kill_starts_second_round_and_prompts_dead_ravenkeeper():
 
 
 def test_second_round_buzzes_even_when_ravenkeeper_survives():
-    g = make(["imp", "poisoner", "ravenkeeper", "empath", "chef", "saint", "mayor"])
+    g = make(["imp", "poisoner", "ravenkeeper", "empath", "chef", "saint", "mayor"], phones=True)
+    finish_phones(g)
     to_night2(g)
+    finish_phones(g)
     before = g.buzz
     g.resolve(step(g, "imp"), [p(g, "Dev").pid])
     assert g.buzz == before + 1 and p(g, "Chen").prompt["kind"] == "tap"
@@ -387,35 +389,85 @@ def test_start_refuses_duplicate_characters():
 
 # --- tap tasks ---
 
+def finish_phones(g: Game) -> None:
+    """Every waiting phone completes its tap task or answers its real choice (first legal pick)."""
+    for x in g.phones_waiting():
+        if x.prompt["kind"] == "tap":
+            g.tap(x.token, x.prompt["target"])
+        else:
+            pool = [q.pid for q in g.players if x.prompt["allow_self"] or q.pid != x.pid]
+            g.choose(x.token, pool[:x.prompt["count"]])
+
+
 def test_everyone_without_a_choice_gets_a_tap_task():
-    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"])
+    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"], phones=True)
     kinds = {x.name: x.prompt["kind"] for x in g.players}
     assert kinds == {"Asha": "tap", "Ben": "choose", "Chen": "choose", "Dev": "tap",
                      "Ema": "tap", "Finn": "tap", "Gita": "tap"}
     tap = p(g, "Dev").prompt
-    assert tap["target"] in tap["options"] and len(set(tap["options"])) == 3
-    assert sorted(tap["target"]) == sorted(tap["options"][0])
+    assert len(set(tap["options"])) == 6 and set(tap["options"]) <= set(CHARACTERS)
+    assert len(set(tap["target"])) == 3 and set(tap["target"]) <= set(tap["options"])
 
 
-def test_tap_needs_the_matching_button():
+def test_players_without_a_phone_get_no_tap_task_and_are_not_waited_for():
     g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"])
+    assert all(x.prompt is None or x.prompt["kind"] == "choose" for x in g.players)
+    assert g.phones_done() == (0, 0)
+    g.start_day()
+
+
+def test_tap_needs_the_icons_in_order():
+    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"], phones=True)
     dev = p(g, "Dev")
-    wrong = next(o for o in dev.prompt["options"] if o != dev.prompt["target"])
-    with pytest.raises(GameError):
-        g.tap(dev.token, wrong)
+    target = dev.prompt["target"]
+    for wrong in (target[::-1], target[:2], [target[0], target[1], next(o for o in dev.prompt["options"] if o not in target)]):
+        with pytest.raises(GameError, match="Start again"):
+            g.tap(dev.token, wrong)
     assert g.phones_done() == (0, 7)
-    g.tap(dev.token, dev.prompt["target"])
-    assert dev.prompt["answer"] == dev.prompt["target"] and g.phones_done() == (1, 7)
+    g.tap(dev.token, target)
+    assert dev.prompt["answer"] == target and g.phones_done() == (1, 7)
+
+
+def test_dawn_waits_for_every_phone_with_no_override():
+    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"], phones=True)
+    with pytest.raises(GameError, match="before dawn"):
+        g.start_day()
+    finish_phones(g)
+    dev = p(g, "Dev")
+    g.ask(step(g, "poisoner"))
+    with pytest.raises(GameError, match="Ben to finish"):
+        g.start_day()
+    assert g.phase == "night" and g.storyteller_view()["phones"] == [
+        {"pid": x.pid, "name": x.name, "done": x.name != "Ben"} for x in g.players]
+    finish_phones(g)
+    g.start_day()
+    assert g.phase == "day" and dev.prompt is None
+
+
+def test_second_buzz_waits_for_every_phone():
+    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"], phones=True)
+    finish_phones(g)
+    to_night2(g)
+    with pytest.raises(GameError, match="before the second buzz"):
+        g.resolve(step(g, "imp"), [p(g, "Ema").pid])
+    assert p(g, "Ema").alive, "a refused Imp pick must not kill"
+    with pytest.raises(GameError, match="before the second buzz"):
+        g.second_round()
+    finish_phones(g)
+    g.resolve(step(g, "imp"), [p(g, "Ema").pid])
+    assert g.second_round_done and not p(g, "Ema").alive
 
 
 def test_second_round_taps_keep_earlier_answers_and_skip_known_dead():
-    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"])
+    g = make(["imp", "poisoner", "fortune_teller", "empath", "chef", "saint", "mayor"], phones=True)
+    finish_phones(g)
     g.start_day()
     g.kill(p(g, "Finn").pid)
     g.end_day()
     assert p(g, "Finn").prompt is None
     chen = p(g, "Chen")
     g.choose(chen.token, [p(g, "Asha").pid, p(g, "Dev").pid])
+    finish_phones(g)
     g.resolve(step(g, "imp"), [p(g, "Ema").pid])
     assert chen.prompt["kind"] == "tap"
     assert g.storyteller_view()["steps"][step(g, "fortune_teller")]["answer"] == [p(g, "Asha").pid, p(g, "Dev").pid]
@@ -514,10 +566,11 @@ def test_undo_keeps_buzz_notes_and_counts_lost_phone_picks():
     assert g.buzz == buzz + 1, "undo must not lower the buzz, or phones would buzz again"
     assert g.inbox[-1]["text"] == "Is the Saint safe?"
 
-    undoable(g, "kill", p(g, "Gita").pid)
-    tapper = next(x for x in g.players if x.prompt and x.prompt["kind"] == "tap" and not x.prompt["answer"])
-    g.tap(tapper.token, tapper.prompt["target"])
-    assert g.undo_info()["phone_picks"] == 1
+    g2 = make(["imp", "baron", "chef", "empath", "monk", "saint", "soldier"], phones=True)
+    undoable(g2, "kill", p(g2, "Gita").pid)
+    tapper = next(x for x in g2.players if x.prompt and x.prompt["kind"] == "tap" and not x.prompt["answer"])
+    g2.tap(tapper.token, tapper.prompt["target"])
+    assert g2.undo_info()["phone_picks"] == 1
 
 
 def test_undo_in_lobby_keeps_players_who_joined_since():

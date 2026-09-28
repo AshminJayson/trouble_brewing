@@ -31,8 +31,10 @@ class Player:
     prompt schema, one of (or None):
         real choice: {"kind": "choose", "text": str, "count": int, "allow_self": bool,
                       "answer": list[str] | None, "step": int (index into Game.steps)}
-        tap task:    {"kind": "tap", "text": str, "target": str, "options": list[str] (3),
-                      "answer": str | None, "step": None}
+        tap task:    {"kind": "tap", "text": str, "target": list[str] (3 character ids, in order),
+                      "options": list[str] (6 character ids incl. the targets), "answer": list[str] | None,
+                      "step": None}
+    phone is False for players the Storyteller seated by hand; they never get tap tasks.
     """
     pid: str
     token: str
@@ -43,6 +45,7 @@ class Player:
     ghost_vote: bool = True
     messages: list[dict] = field(default_factory=list)
     prompt: dict | None = None
+    phone: bool = False
 
 
 class Game:
@@ -147,8 +150,11 @@ class Game:
 
     # --- lobby ---
 
-    def add_player(self, name: str) -> Player:
-        """Seat a new player at the end of the circle (lobby only). Returns the player incl. token."""
+    def add_player(self, name: str, phone: bool = False) -> Player:
+        """Seat a new player at the end of the circle (lobby only). Returns the player incl. token.
+
+        phone is True when the player joined from their own phone, so night rounds wait for them.
+        """
         self._require("lobby")
         name = name.strip()
         if not name:
@@ -157,7 +163,7 @@ class Game:
             raise GameError(f"{name} is already taken")
         if len(self.players) >= max(SETUP_COUNTS):
             raise GameError("Table is full")
-        p = Player(pid=f"p{self._next_pid}", token=secrets.token_urlsafe(12), name=name)
+        p = Player(pid=f"p{self._next_pid}", token=secrets.token_urlsafe(12), name=name, phone=phone)
         self._next_pid += 1
         self.players.append(p)
         return p
@@ -330,6 +336,7 @@ class Game:
         self._require("night")
         if self.second_round_done:
             return
+        self._require_phones_done("the second buzz")
         self.second_round_done = True
         for i, s in enumerate(self.steps):
             if s["key"] == "ravenkeeper" and self.step_applies(s):
@@ -339,30 +346,43 @@ class Game:
         self._log("Second round: every phone buzzes")
 
     def _hand_out_tap_tasks(self) -> None:
-        """Give a tap task to every publicly alive player not busy with an unanswered real choice.
+        """Give a tap task to every publicly alive phone player not busy with an unanswered real choice.
 
-        Algorithm: pick three distinct letters, take their six orderings, and offer the target plus
-        two other orderings in random order. Tonight's victims count as alive so they tap like
-        everyone else; players known dead since an earlier day are left alone.
+        Algorithm: draw six different character icons, and ask for three of them in a set order;
+        the phone shows the three in order above a shuffled grid of all six. A random guess passes
+        1 time in 120, so a player has to look. Tonight's victims count as alive so they tap like
+        everyone else; players known dead since an earlier day, and players without a phone, are
+        left alone.
         """
-        letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
         for p in self.players:
-            if not self._publicly_alive(p):
+            if not p.phone or not self._publicly_alive(p):
                 continue
             if p.prompt and p.prompt["kind"] == "choose" and p.prompt["answer"] is None:
                 continue
-            a, b, c = self.rng.sample(letters, 3)
-            orders = [a + b + c, a + c + b, b + a + c, b + c + a, c + a + b, c + b + a]
-            target = self.rng.choice(orders)
-            options = [target] + self.rng.sample([o for o in orders if o != target], 2)
-            self.rng.shuffle(options)
-            p.prompt = {"kind": "tap", "text": f"Tap the button that says {target}.", "target": target,
+            options = self.rng.sample(sorted(CHARACTERS), 6)
+            target = self.rng.sample(options, 3)
+            p.prompt = {"kind": "tap", "text": "Tap these three, in this order.", "target": target,
                         "options": options, "answer": None, "step": None}
 
+    def _phone_players(self) -> list[Player]:
+        """Publicly alive players with a phone: everyone a night round waits for."""
+        return [p for p in self.players if p.phone and self._publicly_alive(p)]
+
+    def phones_waiting(self) -> list[Player]:
+        """Phone players who still have an unanswered prompt (tap task or real choice)."""
+        return [p for p in self._phone_players() if p.prompt and p.prompt["answer"] is None]
+
     def phones_done(self) -> tuple[int, int]:
-        """(publicly alive players whose phone has nothing left to tap, publicly alive players)."""
-        alive = [p for p in self.players if self._publicly_alive(p)]
-        return sum(not p.prompt or p.prompt["answer"] is not None for p in alive), len(alive)
+        """(phone players with nothing left to tap, phone players)."""
+        phones = self._phone_players()
+        return len(phones) - len(self.phones_waiting()), len(phones)
+
+    def _require_phones_done(self, before: str) -> None:
+        """Refuse to go on while any phone player has not finished; there is no override."""
+        waiting = [p.name for p in self.phones_waiting()]
+        if waiting:
+            raise GameError(f"Waiting for {' and '.join(waiting) if len(waiting) < 3 else ', '.join(waiting)} "
+                            f"to finish on their phone before {before}")
 
     def _notify(self, pid: str, text: str) -> None:
         """Hold a private text for the next table-wide buzz."""
@@ -445,6 +465,9 @@ class Game:
         if not s["allow_self"] and actor in targets:
             raise GameError("This character cannot choose themselves")
         key = s["key"]
+        # the Imp's pick triggers the second buzz, so check before anything is applied
+        if key == "imp" and not self.second_round_done:
+            self._require_phones_done("the second buzz")
         if key == "poisoner":
             self.poisoned = targets[0].pid
             self._log(f"Poisoner poisons {targets[0].name}")
@@ -559,14 +582,14 @@ class Game:
             self.steps[p.prompt["step"]]["answer"] = choices
         self.phone_inputs += 1
 
-    def tap(self, token: str, option: str) -> None:
-        """Player completes their tap task by pressing the button matching the target."""
+    def tap(self, token: str, sequence: list[str]) -> None:
+        """Player completes their tap task by tapping the three shown icons in order."""
         p = self.by_token(token)
         if not p.prompt or p.prompt["kind"] != "tap":
             raise GameError("Nothing to tap right now")
-        if option != p.prompt["target"]:
-            raise GameError(f"That one says {option}. Tap {p.prompt['target']}.")
-        p.prompt["answer"] = option
+        if sequence != p.prompt["target"]:
+            raise GameError("Not quite. Start again from the first one.")
+        p.prompt["answer"] = sequence
         self.phone_inputs += 1
 
     def note_to_storyteller(self, token: str, text: str) -> None:
@@ -593,6 +616,7 @@ class Game:
         An Undertaker step the Storyteller did not send is worked out and sent automatically first.
         """
         self._require("night")
+        self._require_phones_done("dawn")
         self._auto_undertaker()
         self._flush(filler="Nothing to report tonight.")
         self.buzz += 1
@@ -877,7 +901,7 @@ class Game:
         impaired, answer}], red_herring, bluffs, poisoned, protected, master, virgin_spent,
         slayer_spent, executed_today, night_deaths, steps (with applies / impaired / answer added),
         nominations_full, queued {pid: [text]}, second_round_done, inbox [{pid, text, label, read}],
-        phones_done [done, total],
+        phones_done [done, total], phones [{pid, name, done}] (phone players a round waits for),
         warnings, log, bluff_problems [str], undo (see undo_info).
         """
         steps = []
@@ -896,6 +920,7 @@ class Game:
             "night_deaths": self.night_deaths, "steps": steps, "nominations_full": self.nominations,
             "queued": {pid: texts for pid, texts in self.queued.items()}, "second_round_done": self.second_round_done,
             "inbox": self.inbox, "phones_done": list(self.phones_done()),
+            "phones": [{"pid": p.pid, "name": p.name, "done": p not in self.phones_waiting()} for p in self._phone_players()],
             "warnings": self.setup_warnings(), "log": self.log, "undo": self.undo_info(),
             "bluff_problems": self.bluff_problems(self.bluffs) if self.phase == "setup" else [],
         }
