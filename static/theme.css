@@ -1,0 +1,168 @@
+@import url(/static/fonts/fonts.css);
+
+:root {
+  --felt: #1E3A32;
+  --felt-deep: #16302A;
+  --felt-line: #2E5247;
+  --parchment: #EFE5CC;
+  --parchment-dim: #D9CCAA;
+  --ink: #2B2118;
+  --ink-soft: #6B5B45;
+  --lapis: #2F5C9A;
+  --oxblood: #9E2A2F;
+  --brass: #B8904A;
+  --brass-bright: #D6AE62;
+  --moss: #3E7431;
+  --poison: #6E3F7C;
+  --on-felt: #E4DCC6;
+  --on-felt-dim: #9FB3A8;
+  --accent-text: var(--brass-bright);
+
+  --display: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+  --body: 'Alegreya Sans', 'Gill Sans', 'Trebuchet MS', sans-serif;
+
+  /* type scale, ratio 1.25 */
+  --t-xs: 0.8rem;
+  --t-sm: 0.9rem;
+  --t-md: 1rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.563rem;
+  --t-2xl: 1.953rem;
+  --t-3xl: 2.441rem;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--body);
+  font-size: var(--t-md);
+  line-height: 1.45;
+  color: var(--on-felt);
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.05), transparent 65%),
+    var(--felt);
+  transition: background-color 1.2s ease, color 1.2s ease;
+}
+
+/* day: the same table by daylight; night keeps the dark felt */
+body.day {
+  --felt: #EFE5CC;
+  --felt-deep: #E2D4B0;
+  --felt-line: #CDBD95;
+  --parchment: #FBF6E8;
+  --on-felt: #2B2118;
+  --on-felt-dim: #6B5B45;
+  --accent-text: #7F5F24;
+}
+
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; line-height: 1.15; }
+
+button, select, input, textarea { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--brass-bright); outline-offset: 2px; }
+
+/* --- buttons --- */
+.btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5em 1.1em;
+  background: var(--brass);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:hover { background: var(--brass-bright); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn.quiet { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px currentColor; font-weight: 500; }
+.btn.quiet:hover { background: rgba(127, 110, 80, 0.15); }
+.btn.small { padding: 0.25em 0.8em; font-size: var(--t-sm); }
+
+/* --- character token --- */
+.token {
+  --size: 92px;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 10%;
+  color: var(--ink);
+  background: radial-gradient(circle at 38% 30%, #F8F0DB, var(--parchment) 55%, var(--parchment-dim));
+  box-shadow: 0 0 0 3px var(--felt-deep), 0 0 0 4px rgba(214, 174, 98, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
+  font-family: var(--display);
+  font-size: calc(var(--size) * 0.15);
+  line-height: 1.05;
+}
+.token.good .char { color: var(--lapis); }
+.token.outsider .char { color: var(--moss); }
+.token.evil .char { color: var(--oxblood); }
+.token.blank .char { color: var(--ink-soft); font-style: italic; }
+.token.dead { filter: grayscale(0.9) brightness(0.8); }
+/* shroud: the black banner laid over a dead player's token */
+.token.dead::after {
+  content: "";
+  position: absolute;
+  top: -3%;
+  left: 50%;
+  width: 24%;
+  height: 34%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  opacity: 0.9;
+}
+.token.lit { box-shadow: 0 0 0 3px var(--brass-bright), 0 0 22px 6px rgba(214, 174, 98, 0.55); }
+
+.nameplate {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 10px;
+  border-radius: 4px;
+  background: var(--felt-deep);
+  color: var(--on-felt);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* reminder markers attached to a token */
+.reminders { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin-top: 3px; }
+.rem {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: var(--parchment);
+  background: var(--ink-soft);
+  white-space: nowrap;
+}
+.rem.poison { background: var(--poison); }
+.rem.safe { background: var(--brass); color: var(--ink); }
+.rem.master { background: var(--lapis); }
+.rem.herring { background: var(--oxblood); }
+.rem.vote { background: var(--parchment-dim); color: var(--ink); }
+
+/* --- paper surfaces --- */
+.paper {
+  background: var(--parchment);
+  color: var(--ink);
+  background-image: radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.5), transparent 60%);
+}
+
+/* team colours: light on night felt, deep on paper and by day */
+.good-text { color: #A9C6EE; }
+.outsider-text { color: #A8D69B; }
+.evil-text { color: #F09A94; }
+.paper .good-text, body.day .good-text { color: var(--lapis); }
+.paper .outsider-text, body.day .outsider-text { color: var(--moss); }
+.paper .evil-text, body.day .evil-text { color: var(--oxblood); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

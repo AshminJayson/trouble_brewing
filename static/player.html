@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1E3A32">
+<title>Trouble Brewing</title>
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  main { max-width: 30rem; margin: 0 auto; padding: 1rem 1.1rem 3rem; }
+
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 1.4rem; }
+  .top h1 { font-size: var(--t-lg); font-style: italic; color: var(--accent-text); }
+  .top .when { font-size: var(--t-sm); color: var(--on-felt-dim); text-align: right; }
+
+  section { margin-top: 2rem; }
+  section > h2 { font-size: var(--t-xl); margin-bottom: 0.7rem; }
+
+  /* --- join --- */
+  .join { padding: 1.4rem; border-radius: 14px; }
+  .join h2 { font-size: var(--t-2xl); margin-bottom: 0.4rem; }
+  .join p { margin: 0 0 1rem; color: var(--ink-soft); }
+  .join form { display: flex; gap: 0.5rem; }
+  .join input { flex: 1; min-width: 0; padding: 0.6em 0.9em; border: 1px solid var(--ink-soft); border-radius: 999px; background: #fff8e6; }
+
+  /* --- role token hero --- */
+  .hero { display: grid; justify-items: center; text-align: center; margin-top: 0.5rem; }
+  .flip { background: none; border: 0; padding: 0; cursor: pointer; perspective: 900px; border-radius: 50%; }
+  .flip .inner { position: relative; width: 15rem; height: 15rem; transition: transform 0.5s cubic-bezier(.3,.7,.3,1); transform-style: preserve-3d; }
+  .flip.open .inner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; backface-visibility: hidden; }
+  .face.front { transform: rotateY(180deg); }
+  .face .token { --size: 15rem; }
+  .face .token .char { font-size: var(--t-2xl); }
+  .face.back .token { background: radial-gradient(circle at 38% 30%, #3b5e53, var(--felt-deep)); }
+  .face.back svg { width: 72%; height: 72%; }
+  .hero .token.blank .char { font-size: var(--t-lg); padding: 0 1.5rem; }
+  .hero .hint { margin-top: 0.9rem; color: var(--on-felt-dim); font-size: var(--t-sm); }
+  .ability { margin: 1rem 0 0; max-width: 26rem; text-align: left; }
+  .ability .team { font-family: var(--display); font-style: italic; font-size: var(--t-lg); }
+  .ability p { margin: 0.3rem 0 0; }
+
+  .call {
+    display: block; width: 100%; margin-bottom: 1rem; padding: 0.8rem 1rem; border: 1px solid var(--brass); border-radius: 12px;
+    background: var(--felt-deep); color: var(--on-felt); text-align: left; cursor: pointer;
+  }
+  .call b { font-family: var(--display); font-weight: 400; font-size: var(--t-lg); color: var(--accent-text); display: block; }
+
+  /* --- slips of paper from the storyteller --- */
+  .slip { margin: 0 0 0.7rem; padding: 0.8rem 1rem; border-radius: 4px; white-space: pre-wrap; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
+  .slip .when { display: block; font-family: var(--display); font-style: italic; color: var(--ink-soft); font-size: var(--t-sm); }
+  .slip.ask { border-left: 5px solid var(--brass); white-space: normal; }
+  .picks { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.8rem 0; }
+  .pick { border: 1px solid var(--ink-soft); background: transparent; border-radius: 999px; padding: 0.35em 0.9em; cursor: pointer; font-family: var(--display); font-size: var(--t-md); }
+  .pick[aria-pressed="true"] { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .pick.dead { opacity: 0.6; }
+  .slip .miss { margin: 0; color: var(--oxblood); font-weight: 700; }
+  .picks.taps .pick { flex: 1; font-family: var(--body); font-weight: 700; letter-spacing: 0.2em; padding: 0.6em 0; }
+  .empty { color: var(--on-felt-dim); font-style: italic; }
+  textarea.note { width: 100%; min-height: 5rem; padding: 0.7em 0.9em; border-radius: 12px; border: 1px solid var(--felt-line); background: var(--felt-deep); color: var(--on-felt); resize: vertical; }
+  .noteactions { display: flex; align-items: center; gap: 0.8rem; margin: 0.6rem 0 1rem; }
+  .slip.mine { background: var(--felt-deep); color: var(--on-felt); border: 1px solid var(--felt-line); box-shadow: none; }
+  .slip.mine .when { color: var(--on-felt-dim); }
+
+  /* --- town square ring --- */
+  .ring { position: relative; width: 100%; aspect-ratio: 1; max-width: 26rem; margin: 0 auto; }
+  .ring::before { content: ""; position: absolute; inset: 18%; border-radius: 50%; border: 1px dashed var(--felt-line); }
+  .seat { position: absolute; transform: translate(-50%, -50%); text-align: center; width: 4.8rem; }
+  .seat .dot { width: 1.9rem; height: 1.9rem; margin: 0 auto 2px; border-radius: 50%; background: var(--parchment); box-shadow: 0 0 0 2px var(--felt-deep); display: grid; place-items: center; color: var(--ink); font-size: var(--t-xs); font-weight: 700; }
+  .seat.me .dot { box-shadow: 0 0 0 2px var(--brass-bright); }
+  .seat.dead .dot { background: #262626; color: var(--on-felt-dim); }
+  .seat .who { font-family: var(--display); font-size: var(--t-sm); line-height: 1.1; overflow-wrap: anywhere; }
+  .seat.dead .who { color: var(--on-felt-dim); text-decoration: line-through; }
+  .seat small { display: block; font-size: 0.7rem; }
+  .ring .center { position: absolute; inset: 30%; display: grid; place-content: center; text-align: center; }
+  .ring .center b { font-family: var(--display); font-size: var(--t-3xl); font-weight: 400; line-height: 1; color: var(--accent-text); }
+  .ring .center span { font-size: var(--t-sm); color: var(--on-felt-dim); }
+
+  .crier { list-style: none; padding: 0; margin: 0; }
+  .crier li { padding: 0.35rem 0; border-bottom: 1px solid var(--felt-line); }
+
+  .verdict { margin-top: 1rem; padding: 1.2rem; border-radius: 14px; text-align: center; }
+  .verdict h2 { font-size: var(--t-3xl); }
+
+  details.almanac summary { cursor: pointer; font-family: var(--display); font-size: var(--t-xl); }
+  .almanac h3 { font-size: var(--t-lg); margin: 1rem 0 0.3rem; color: var(--accent-text); }
+  .almanac dl { margin: 0; }
+  .almanac dt { font-family: var(--display); font-size: var(--t-md); margin-top: 0.5rem; }
+  .almanac dd { margin: 0; color: var(--on-felt-dim); font-size: var(--t-sm); }
+  .err { color: #ffb4a8; margin-top: 0.6rem; }
+  body.day .err { color: var(--oxblood); }
+  body.day .seat.dead .dot { color: #C9C0AE; }
+</style>
+</head>
+<body>
+<main id="app"><p class="empty">Finding the table...</p></main>
+<script>
+const $app = document.getElementById("app");
+let token = localStorage.getItem("tb_token");
+let state = null, chars = {}, lastVersion = -1;
+let revealed = false, picks = [], error = "", seen = Number(localStorage.getItem("tb_seen") || 0), hideTimer = null, almanacOpen = false, noteDraft = "", noteSent = false, tapError = "";
+let lastBuzz = localStorage.getItem("tb_buzz");
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const team = type => (type === "minion" || type === "demon") ? "evil" : "good";
+const tone = type => type === "outsider" ? "outsider" : team(type);
+const TYPE_LABEL = {townsfolk: "Townsfolk", outsider: "Outsider", minion: "Minion", demon: "Demon"};
+
+const CLOCK = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <circle cx="50" cy="50" r="44" fill="none" stroke="#D6AE62" stroke-width="2"/>
+  ${[...Array(12).keys()].map(i => `<line x1="50" y1="9" x2="50" y2="${i % 3 ? 14 : 18}" stroke="#D6AE62" stroke-width="${i % 3 ? 1.5 : 3}" transform="rotate(${i * 30} 50 50)"/>`).join("")}
+  <line x1="50" y1="50" x2="50" y2="24" stroke="#EFE5CC" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="50" y1="50" x2="68" y2="58" stroke="#EFE5CC" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="50" cy="50" r="3" fill="#D6AE62"/></svg>`;
+
+async function api(path, body) {
+  const res = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.detail?.[0]?.msg || res.statusText);
+  return data;
+}
+
+async function poll() {
+  try {
+    state = await api(token ? `/api/state?token=${encodeURIComponent(token)}` : "/api/state");
+    error = "";
+  } catch (e) {
+    if (token && /join again/.test(e.message)) { token = null; localStorage.removeItem("tb_token"); state = null; }
+    error = e.message;
+  }
+  // re-rendering while typing would wipe the name field
+  if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+  if (!state || state.version !== lastVersion || error) { lastVersion = state?.version; render(); }
+}
+
+async function join(ev) {
+  ev.preventDefault();
+  try {
+    const r = await api("/api/join", {name: document.getElementById("name").value});
+    token = r.token;
+    localStorage.setItem("tb_token", token);
+    localStorage.setItem("tb_seen", "0");
+    seen = 0; lastVersion = -1;
+    document.activeElement.blur();
+    poll();
+  } catch (e) { error = e.message; render(); }
+}
+
+// tap task: everyone without a real choice taps too, so real choices do not stand out
+function tapTask(p) {
+  if (p.answer) return `<div class="slip paper ask"><span class="when">Done</span>Keep your phone close until dawn.</div>`;
+  return `<div class="slip paper ask"><span class="when">The Storyteller asks</span>${esc(p.text)}
+    <div class="picks taps">${p.options.map(o => `<button class="pick" onclick="tapOption('${o}')">${o}</button>`).join("")}</div>
+    ${tapError ? `<p class="miss">${esc(tapError)}</p>` : ""}</div>`;
+}
+
+async function tapOption(option) {
+  try { await api("/api/tap", {token, option}); tapError = ""; lastVersion = -1; poll(); }
+  catch (e) { tapError = e.message; render(); }
+}
+
+async function confirmPick() {
+  try { await api("/api/choose", {token, choices: picks}); picks = []; lastVersion = -1; poll(); }
+  catch (e) { error = e.message; render(); }
+}
+
+function togglePick(pid, count) {
+  if (picks.includes(pid)) picks = picks.filter(p => p !== pid);
+  else if (picks.length < count) picks = [...picks, pid];
+  render();
+}
+
+function flip() {
+  revealed = !revealed;
+  clearTimeout(hideTimer);
+  if (revealed && state?.me) {
+    seen = state.me.messages.length;
+    localStorage.setItem("tb_seen", String(seen));
+    armHide();
+  }
+  render();
+}
+
+function armHide() {
+  clearTimeout(hideTimer);
+  // hide again on its own so a phone left on the table does not give the role away
+  hideTimer = setTimeout(() => { revealed = false; render(); }, 45000);
+}
+
+async function sendNote() {
+  try {
+    await api("/api/note", {token, text: noteDraft});
+    noteDraft = "";
+    noteSent = true;
+    document.activeElement?.blur();
+    lastVersion = -1;
+    poll();
+  } catch (e) { error = e.message; render(); }
+}
+
+function noteBox(me) {
+  const sent = me.notes.slice().reverse().map(n => `<div class="slip mine"><span class="when">You, ${esc(n.label)}</span>${esc(n.text)}</div>`).join("");
+  return `<section><h2>Ask the Storyteller</h2>
+    <p class="empty">Questions about the rules, or anything you want only the Storyteller to know.</p>
+    <textarea id="note" class="note" maxlength="500" placeholder="Only the Storyteller sees this"
+      oninput="noteDraft = this.value; noteSent = false; armHide(); document.getElementById('note-send').disabled = !this.value.trim()">${esc(noteDraft)}</textarea>
+    <div class="noteactions"><button class="btn" ${noteDraft.trim() ? "" : "disabled"} id="note-send" onclick="sendNote()">Send to the Storyteller</button>
+      ${noteSent ? `<span class="empty">Sent.</span>` : ""}</div>${sent}</section>`;
+}
+
+function when(s) {
+  return {lobby: "Waiting for everyone to sit down", setup: "The Storyteller is dealing",
+          night: `Night ${s.night}`, day: `Day ${s.day}`, over: "The game is over"}[s.phase];
+}
+
+function joinScreen() {
+  const open = !state || state.phase === "lobby";
+  return `<div class="top"><h1>Trouble Brewing</h1></div>
+    <div class="join paper">${open ? `
+      <h2>Take a seat</h2>
+      <p>Use the name everyone at the table calls you.</p>
+      <form onsubmit="join(event)"><input id="name" placeholder="Your name" autocomplete="off" maxlength="20" required>
+      <button class="btn">Join the game</button></form>` : `
+      <h2>This game has started</h2>
+      <p>Ask the Storyteller to add you to the next one.</p>`}
+      ${error ? `<p class="err">${esc(error)}</p>` : ""}</div>`;
+}
+
+function hero(me) {
+  if (!me.role) {
+    return `<div class="hero"><div class="token blank" style="--size:15rem"><span class="char">Your character is dealt when the game starts</span></div></div>`;
+  }
+  const r = me.role, t = team(r.type), c = tone(r.type);
+  return `<div class="hero">
+    <button class="flip ${revealed ? "open" : ""}" onclick="flip()" aria-label="${revealed ? "Hide" : "Show"} my character">
+      <div class="inner">
+        <div class="face back"><div class="token">${CLOCK}</div></div>
+        <div class="face front"><div class="token ${c}"><span class="char">${revealed ? esc(r.name) : ""}</span></div></div>
+      </div>
+    </button>
+    <div class="hint">${revealed ? "Tap the token to hide it" : "Shield your screen, then tap to see your character"}</div>
+    ${revealed ? `<div class="ability"><div class="team ${c}-text">${TYPE_LABEL[r.type]}, ${t === "good" ? "on the good team" : "on the evil team"}</div><p>${esc(r.ability)}</p></div>` : ""}
+  </div>`;
+}
+
+function prompt(s, me) {
+  const p = me.prompt;
+  if (!p) return "";
+  if (p.kind === "tap") return tapTask(p);
+  if (p.answer) {
+    const names = p.answer.map(pid => esc(s.seats.find(x => x.pid === pid)?.name)).join(" and ");
+    return `<div class="slip paper ask"><span class="when">You chose</span>${names}. The Storyteller will tell you what happens.</div>`;
+  }
+  const options = s.seats.filter(x => p.allow_self || x.pid !== me.pid);
+  return `<div class="slip paper ask"><span class="when">The Storyteller asks</span>${esc(p.text)}
+    <div class="picks">${options.map(x => `<button class="pick ${x.alive ? "" : "dead"}" aria-pressed="${picks.includes(x.pid)}" onclick="togglePick('${x.pid}', ${p.count})">${esc(x.name)}</button>`).join("")}</div>
+    <button class="btn" ${picks.length === p.count ? "" : "disabled"} onclick="confirmPick()">Confirm choice</button></div>`;
+}
+
+function ring(s, me) {
+  const n = s.seats.length;
+  const seats = s.seats.map((x, i) => {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const left = 50 + 38 * Math.cos(a), top = 50 + 40 * Math.sin(a);
+    const c = x.character && chars[x.character];
+    const note = c ? `<small class="${tone(c.type)}-text">${esc(c.name)}</small>` : (!x.alive ? `<small>${x.ghost_vote ? "has a vote" : "no vote left"}</small>` : "");
+    return `<div class="seat ${x.alive ? "" : "dead"} ${x.pid === me.pid ? "me" : ""}" style="left:${left}%;top:${top}%">
+      <div class="dot">${i + 1}</div><div class="who">${esc(x.name)}</div>${note}</div>`;
+  }).join("");
+  const alive = s.seats.filter(x => x.alive).length;
+  const center = s.phase === "day"
+    ? `<b>${s.threshold}</b><span>votes to execute</span>`
+    : `<b>${alive}</b><span>of ${n} alive</span>`;
+  return `<div class="ring">${seats}<div class="center">${center}</div></div>`;
+}
+
+function almanac() {
+  const groups = ["townsfolk", "outsider", "minion", "demon"].map(t => `<h3>${TYPE_LABEL[t]}</h3><dl>${
+    Object.values(chars).filter(c => c.type === t).map(c => `<dt>${esc(c.name)}</dt><dd>${esc(c.summary)}</dd>`).join("")}</dl>`).join("");
+  return `<section><details class="almanac" ${almanacOpen ? "open" : ""} ontoggle="almanacOpen = this.open"><summary>Every character in this script</summary>${groups}</details></section>`;
+}
+
+function setDaylight(phase) {
+  const night = phase === "night";
+  document.body.classList.toggle("day", !night);
+  document.querySelector('meta[name="theme-color"]').content = night ? "#1E3A32" : "#EFE5CC";
+}
+
+function render() {
+  setDaylight(state?.phase);
+  if (!token || !state || !state.me) { $app.innerHTML = joinScreen(); return; }
+  const s = state, me = s.me;
+  // only table-wide buzzes vibrate, so a phone never singles out its owner
+  if (lastBuzz !== null && Number(lastBuzz) !== s.buzz && s.buzz > 0 && navigator.vibrate) navigator.vibrate(200);
+  lastBuzz = String(s.buzz);
+  localStorage.setItem("tb_buzz", lastBuzz);
+  // every living player sees the same nudge at night, whether or not they have anything to do
+  const nudge = !revealed && ((s.phase === "night" && me.alive) || me.messages.length > seen || (me.prompt && !me.prompt.answer));
+
+  const counts = s.counts && Object.keys(s.counts).length
+    ? `<p class="empty">In play: ${Object.entries(s.counts).map(([t, k]) => `${k} ${TYPE_LABEL[t]}${k === 1 || t === "townsfolk" ? "" : "s"}`).join(", ")}.</p>` : "";
+
+  let html = `<div class="top"><h1>Trouble Brewing</h1><div class="when">${esc(me.name)}${me.alive ? "" : ", dead"}<br>${when(s)}</div></div>`;
+  if (s.winner) html += `<div class="verdict paper"><h2 class="${s.winner}-text">${s.winner === "good" ? "Good" : "Evil"} wins</h2><p>${esc(s.win_reason)}</p></div>`;
+  if (nudge) html += `<button class="call" onclick="flip()"><b>${s.phase === "night" ? `Night ${s.night}` : "Dawn"}</b>Everyone does this: shield your screen and open your token.</button>`;
+  html += hero(me);
+
+  if (revealed) {
+    html += `<section><h2>From the Storyteller</h2>${prompt(s, me)}${
+      me.messages.length ? me.messages.slice().reverse().map(m => `<div class="slip paper"><span class="when">${esc(m.label)}</span>${esc(m.text)}</div>`).join("")
+                         : `<p class="empty">Nothing yet. Anything you learn at night appears here.</p>`}</section>`;
+    if (me.notes) html += noteBox(me);
+  }
+  if (error) html += `<p class="err">${esc(error)}</p>`;
+
+  html += `<section><h2>Town square</h2>${ring(s, me)}${counts}</section>`;
+  if (s.announcements.length) {
+    html += `<section><h2>${s.phase === "day" ? "Today" : "Last heard"}</h2><ul class="crier">${s.announcements.map(a => `<li>${esc(a)}</li>`).join("")}</ul></section>`;
+  }
+  html += almanac();
+  $app.innerHTML = html;
+}
+
+api("/api/characters").then(c => { chars = c; render(); });
+poll();
+setInterval(poll, 1500);
+</script>
+</body>
+</html>

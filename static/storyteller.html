@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grimoire - Trouble Brewing</title>
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  html { font-size: 16px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 30rem; min-height: 100vh; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+
+  /* --- table side --- */
+  .table { padding: 1.2rem 1.5rem; display: flex; flex-direction: column; }
+  .table header { display: flex; align-items: baseline; gap: 1rem; }
+  .table header h1 { font-size: var(--t-xl); font-style: italic; color: var(--accent-text); }
+  .table header span { color: var(--on-felt-dim); font-size: var(--t-sm); }
+  .square {
+    container-type: size;
+    position: relative;
+    width: min(100%, calc(100vh - 5rem));
+    aspect-ratio: 1;
+    margin: 0.5rem auto 0;
+  }
+  .square::before { content: ""; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid var(--felt-line); }
+  .spot { position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; text-align: center; }
+  .spot .token { cursor: pointer; border: 0; }
+  .square.seating .spot .token { cursor: grab; touch-action: none; }
+  .spot.dragging { z-index: 5; transition: none; }
+  .spot.dragging .token { cursor: grabbing; transform: scale(1.08); box-shadow: 0 0 0 3px var(--brass-bright), 0 14px 30px rgba(0,0,0,.45); }
+  .spot.target .token { box-shadow: 0 0 0 3px var(--felt-deep), 0 0 0 6px var(--brass-bright); opacity: 0.75; }
+  .spot .token:hover { filter: brightness(1.05); }
+  .spot.selected .token { box-shadow: 0 0 0 3px var(--parchment), 0 0 0 6px var(--brass-bright); }
+  .spot .seatno { position: absolute; top: -2px; left: -2px; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--felt-deep); color: var(--on-felt-dim); font-size: var(--t-xs); display: grid; place-items: center; z-index: 1; }
+  .token .char small { display: block; font-family: var(--body); font-size: 0.72em; color: var(--ink-soft); margin-top: 2px; }
+
+  .center { position: absolute; inset: 25%; display: grid; place-content: center; justify-items: center; text-align: center; gap: 0.4rem; }
+  .center h2 { font-size: clamp(2rem, 8cqmin, 4rem); color: var(--on-felt); }
+  .center p { margin: 0; color: var(--on-felt-dim); }
+  .center .qr { width: min(12rem, 26cqmin); background: #fff; padding: 6px; border-radius: 8px; }
+  .center .url { font-size: var(--t-lg); color: var(--on-felt); }
+
+  .inspector { padding: 1rem 1.2rem; border-radius: 14px; width: min(22rem, 48cqmin); text-align: left; display: grid; gap: 0.6rem; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+  .inspector h3 { font-size: var(--t-xl); display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+  .inspector .x { background: none; border: 0; cursor: pointer; color: var(--ink-soft); font-size: var(--t-lg); line-height: 1; }
+  .inspector { max-height: 80cqmin; overflow-y: auto; }
+  .inspector .role { font-family: var(--display); font-size: var(--t-lg); }
+  .details { display: grid; gap: 0.3rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--parchment-dim); }
+  .details .kind { font-size: var(--t-sm); color: var(--ink-soft); }
+  .center .details p { margin: 0; font-size: var(--t-sm); line-height: 1.4; color: var(--ink); }
+  .center:has(.inspector) { inset: 10%; z-index: 2; }
+  .details .believed { padding-left: 0.6rem; border-left: 3px solid var(--poison); }
+  .inspector .acts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  /* --- ledger side --- */
+  .ledger { padding: 1.4rem 1.6rem 3rem; overflow-y: auto; max-height: 100vh; box-shadow: -8px 0 24px rgba(0,0,0,.3); }
+  @media (max-width: 1000px) { .ledger { max-height: none; } }
+  .ledger > h2 { font-size: var(--t-2xl); }
+  .ledger .lede { color: var(--ink-soft); margin: 0.2rem 0 1.2rem; }
+  .ledger h3 { font-size: var(--t-lg); margin: 1.6rem 0 0.5rem; }
+  .field { display: grid; gap: 0.25rem; margin: 0.7rem 0; }
+  .field > span { font-size: var(--t-sm); color: var(--ink-soft); }
+  .line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.6rem 0; }
+  .paper select, .paper input, .paper textarea { background: #fff8e6; border: 1px solid var(--parchment-dim); border-radius: 8px; padding: 0.35em 0.55em; color: var(--ink); }
+  .paper textarea { width: 100%; min-height: 4.5rem; resize: vertical; }
+  .paper input[type=checkbox] { accent-color: var(--ink); }
+  .warn { margin: 0.4rem 0; padding: 0.4rem 0.7rem; border-left: 4px solid var(--oxblood); background: rgba(158, 42, 47, 0.08); }
+  .note { font-size: var(--t-sm); color: var(--ink-soft); margin: 0.3rem 0; }
+
+  /* night order: a genuine sequence, so it is numbered */
+  ol.order { list-style: none; counter-reset: step; padding: 0; margin: 0; }
+  ol.order > li { counter-increment: step; position: relative; padding: 0.55rem 0 0.55rem 2.4rem; border-top: 1px solid var(--parchment-dim); }
+  ol.order > li::before { content: counter(step); position: absolute; left: 0; top: 0.5rem; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); background: var(--parchment-dim); }
+  ol.order > li.current::before { background: var(--brass); }
+  ol.order > li.done { color: var(--ink-soft); }
+  ol.order > li.done::before { content: "\2713"; font-family: var(--body); }
+  ol.order > li.skip { opacity: 0.45; }
+  .stephead { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; cursor: pointer; background: none; border: 0; padding: 0; width: 100%; text-align: left; }
+  .stephead b { font-family: var(--display); font-weight: 400; font-size: var(--t-lg); }
+  .stephead span { font-size: var(--t-sm); color: var(--ink-soft); }
+  .flag { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 0 0.5rem; border-radius: 999px; background: var(--oxblood); color: var(--parchment); }
+  .answer { font-weight: 700; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
+  .chip { border: 1px solid var(--ink-soft); background: transparent; border-radius: 999px; padding: 0.2em 0.75em; cursor: pointer; color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .chip.ghost { border-style: dashed; }
+
+  .nom { padding: 0.6rem 0; border-top: 1px solid var(--parchment-dim); }
+  .nom .tally { font-family: var(--display); font-size: var(--t-lg); }
+  .tally.enough { color: var(--oxblood); }
+  .crier { list-style: none; padding: 0; margin: 0; }
+  .crier li { padding: 0.25rem 0; }
+  .verdict { font-size: var(--t-3xl); }
+
+  details.log { margin-top: 2rem; }
+  details.log summary, details.tools summary { cursor: pointer; font-family: var(--display); font-size: var(--t-lg); }
+  details.log ol { padding-left: 1.2rem; font-size: var(--t-sm); color: var(--ink-soft); max-height: 18rem; overflow-y: auto; }
+  details.tools { margin-top: 1.2rem; }
+
+  .inbox { margin: 0 0 1.4rem; padding: 0.8rem 1rem; border: 1px solid var(--brass); border-radius: 10px; background: rgba(184, 144, 74, 0.1); }
+  .inbox summary { cursor: pointer; font-family: var(--display); font-size: var(--t-lg); }
+  .inbox .notes { list-style: none; padding: 0; margin: 0.5rem 0; max-height: 16rem; overflow-y: auto; }
+  .inbox .notes li { padding: 0.45rem 0; border-top: 1px solid var(--parchment-dim); }
+  .inbox .notes li.unread b { color: var(--oxblood); }
+  .inbox .notes p { margin: 0.15rem 0 0.3rem; white-space: pre-wrap; }
+  .rem.note { background: var(--brass-bright); color: var(--ink); }
+  .toast { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); background: var(--oxblood); color: var(--parchment); padding: 0.7rem 1.2rem; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="table"><header><h1>Trouble Brewing</h1><span id="sub"></span></header><div class="square" id="square"></div></div>
+  <aside class="ledger paper" id="ledger"></aside>
+</div>
+<div id="toast" role="status"></div>
+<script>
+const KEY = new URLSearchParams(location.search).get("key") || "";
+let S = null, C = {}, lastVersion = -1, toastTimer = null;
+let selected = null, openStep = null, logOpen = false, toolsOpen = false, inboxOpen = false;
+const dirty = {};       // element id -> value typed but not yet submitted
+const voteDraft = {};   // nomination index -> Set of pids
+
+const HINTS = {
+  minion_info: "Wake every Minion together and point out the Demon.",
+  demon_info: "Wake the Demon, point out their Minions, show the three bluffs.",
+  poisoner: "Their pick is poisoned tonight and tomorrow.",
+  washerwoman: "One Townsfolk and two players. A Spy may register as Townsfolk.",
+  librarian: "One Outsider and two players. A Spy may register as an Outsider.",
+  investigator: "One Minion and two players. The Recluse may register as a Minion.",
+  chef: "Adjacent evil pairs. A Spy may register good, the Recluse evil.",
+  empath: "Evil living neighbours. A Spy may register good, the Recluse evil.",
+  fortune_teller: "Yes if either pick is the Demon or the red herring. The Recluse may register as the Demon.",
+  butler: "Their pick is their Master tomorrow.",
+  spy: "Show them the grimoire.",
+  monk: "Their pick cannot be killed by the Demon tonight.",
+  imp: "Picking themselves passes the Imp to a Minion. An attack on the Mayor may land elsewhere. Applying this starts the second round.",
+  ravenkeeper: "Only if they died tonight. They pick during the second round and learn that character at dawn.",
+  undertaker: "Only if someone was executed today. Sent automatically at dawn unless you send or skip it first.",
+};
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cname = id => C[id]?.name ?? "";
+const team = id => ["minion", "demon"].includes(C[id]?.type) ? "evil" : "good";
+const tone = id => C[id]?.type === "outsider" ? "outsider" : team(id);
+const pname = pid => S.players.find(p => p.pid === pid)?.name ?? "";
+const el = id => document.getElementById(id);
+const val = id => el(id)?.type === "checkbox" ? el(id).checked : el(id)?.value;
+const q = s => `'${s}'`;
+
+function toast(msg) {
+  el("toast").innerHTML = `<div class="toast">${esc(msg)}</div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el("toast").innerHTML = "", 5000);
+}
+
+async function api(path, body) {
+  const res = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.detail?.[0]?.msg || res.statusText);
+  return data;
+}
+
+async function act(action, body = {}, clearPrefix = null) {
+  try {
+    S = await api(`/api/st/${action}?key=${encodeURIComponent(KEY)}`, body);
+    if (clearPrefix) Object.keys(dirty).filter(k => k.startsWith(clearPrefix)).forEach(k => delete dirty[k]);
+    lastVersion = S.version;
+    render();
+  } catch (e) { toast(e.message); }
+}
+
+async function poll() {
+  try {
+    const s = await api(`/api/st?key=${encodeURIComponent(KEY)}`);
+    if (s.version !== lastVersion) { S = s; lastVersion = s.version; render(); }
+  } catch (e) { toast(e.message); }
+}
+
+document.addEventListener("input", e => { if (e.target.id) dirty[e.target.id] = e.target.type === "checkbox" ? e.target.checked : e.target.value; });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && selected) { selected = null; render(); } });
+
+function opts(list, chosen, blank) {
+  return (blank !== undefined ? `<option value="">${esc(blank)}</option>` : "") +
+    list.map(([v, label]) => `<option value="${esc(v)}" ${v === chosen ? "selected" : ""}>${esc(label)}</option>`).join("");
+}
+const playerOpts = (filter = () => true, chosen, blank) =>
+  opts(S.players.filter(filter).map(p => [p.pid, p.name + (p.alive ? "" : " (dead)")]), chosen, blank);
+const charOpts = (chosen, type) =>
+  opts(Object.entries(C).filter(([, c]) => !type || c.type === type).map(([id, c]) => [id, c.name]), chosen);
+
+function currentStep() {
+  if (S.phase !== "night") return -1;
+  return S.steps.findIndex(s => !s.done && s.applies);
+}
+
+// --- rendering ---
+
+function render() {
+  // a re-render mid-drag would drop the token being moved
+  if (!S || drag?.moved) return;
+  document.body.classList.toggle("day", S.phase !== "night");
+  const focusId = document.activeElement?.id;
+  if (selected && !S.players.some(p => p.pid === selected)) selected = null;
+  const alive = S.players.filter(p => p.alive).length;
+  const unread = (S.inbox || []).filter(n => !n.read).length;
+  el("sub").textContent = (S.players.length ? `${alive} of ${S.players.length} alive` : "") + (unread ? `, ${unread} new ${unread === 1 ? "note" : "notes"}` : "");
+  el("square").innerHTML = square();
+  el("square").classList.toggle("seating", ["lobby", "setup"].includes(S.phase));
+  el("ledger").innerHTML = inbox() + ({lobby, setup, night, day, over})[S.phase]() + tools() + logBlock();
+  for (const [id, v] of Object.entries(dirty)) {
+    const e = el(id);
+    if (!e) continue;
+    if (e.type === "checkbox") e.checked = v; else e.value = v;
+  }
+  if (focusId && el(focusId)) el(focusId).focus();
+}
+
+function square() {
+  const n = S.players.length;
+  const cur = currentStep();
+  const lit = new Set(cur >= 0 ? S.steps[cur].pids : []);
+  const size = n ? `min(6.4rem, ${Math.round(200 / Math.max(n, 5))}cqmin)` : "6rem";
+  const spots = S.players.map((p, i) => {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const left = 50 + 41 * Math.cos(a), top = 50 + 41 * Math.sin(a);
+    const rems = [];
+    if (S.poisoned === p.pid) rems.push(`<span class="rem poison">poisoned</span>`);
+    if (p.character === "drunk") rems.push(`<span class="rem poison">drunk</span>`);
+    if (S.protected === p.pid) rems.push(`<span class="rem safe">protected</span>`);
+    if (S.master === p.pid) rems.push(`<span class="rem master">master</span>`);
+    if (S.red_herring === p.pid && S.phase !== "lobby") rems.push(`<span class="rem herring">red herring</span>`);
+    if (!p.alive) rems.push(`<span class="rem vote">${p.ghost_vote ? "vote left" : "no vote"}</span>`);
+    if ((S.inbox || []).some(n => n.pid === p.pid && !n.read)) rems.push(`<span class="rem note">note</span>`);
+    const face = p.character
+      ? `<span class="char">${esc(cname(p.character))}${p.believed !== p.character ? `<small>thinks ${esc(cname(p.believed))}</small>` : ""}</span>`
+      : `<span class="char"></span>`;
+    const cls = [p.character ? tone(p.character) : "blank", p.alive ? "" : "dead", lit.has(p.pid) ? "lit" : ""].join(" ");
+    return `<div class="spot ${selected === p.pid ? "selected" : ""}" style="left:${left}%;top:${top}%">
+      <span class="seatno">${i + 1}</span>
+      <button class="token ${cls}" style="--size:${size}" data-pid="${p.pid}" data-seat="${i}" onclick="pick('${p.pid}')" aria-label="${esc(p.name)}">${face}</button>
+      <span class="nameplate">${esc(p.name)}</span>
+      ${rems.length ? `<div class="reminders">${rems.join("")}</div>` : ""}</div>`;
+  }).join("");
+  return spots + `<div class="center">${selected ? inspector() : centerInfo()}</div>`;
+}
+
+function pick(pid) {
+  if (justDragged) { justDragged = false; return; }
+  selected = selected === pid ? null : pid;
+  render();
+}
+
+// --- drag a token onto another seat (lobby and setup) ---
+let drag = null, justDragged = false;
+
+function seatAt(x, y, rect) {
+  const n = S.players.length;
+  const angle = Math.atan2(y - (rect.top + rect.height / 2), x - (rect.left + rect.width / 2));
+  const turn = ((angle + Math.PI / 2) / (2 * Math.PI) + 1) % 1;
+  return Math.round(turn * n) % n;
+}
+
+function markTarget(seat) {
+  document.querySelectorAll(".spot.target").forEach(e => e.classList.remove("target"));
+  if (seat !== null && seat !== drag.from) {
+    document.querySelector(`.token[data-seat="${seat}"]`)?.closest(".spot").classList.add("target");
+  }
+}
+
+el("square").addEventListener("pointerdown", e => {
+  const tok = e.target.closest(".token[data-pid]");
+  if (!tok || !["lobby", "setup"].includes(S?.phase)) return;
+  drag = {pid: tok.dataset.pid, from: Number(tok.dataset.seat), to: null, x0: e.clientX, y0: e.clientY, moved: false, spot: tok.closest(".spot")};
+  tok.setPointerCapture(e.pointerId);
+});
+
+el("square").addEventListener("pointermove", e => {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+  drag.moved = true;
+  const r = el("square").getBoundingClientRect();
+  drag.spot.classList.add("dragging");
+  drag.spot.style.left = `${((e.clientX - r.left) / r.width) * 100}%`;
+  drag.spot.style.top = `${((e.clientY - r.top) / r.height) * 100}%`;
+  drag.to = seatAt(e.clientX, e.clientY, r);
+  markTarget(drag.to);
+});
+
+function endDrag() {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (!d.moved) return;
+  justDragged = true;
+  setTimeout(() => { justDragged = false; }, 0);
+  if (d.to !== null && d.to !== d.from) act("move_player", {pid: d.pid, delta: d.to - d.from});
+  else render();
+}
+el("square").addEventListener("pointerup", endDrag);
+el("square").addEventListener("pointercancel", endDrag);
+
+function centerInfo() {
+  const alive = S.players.filter(p => p.alive).length;
+  if (S.phase === "lobby") {
+    return `<img class="qr" src="/qr.svg" alt="QR code to join"><div class="url">${esc(S.join_url)}</div>
+      <p>${S.players.length ? `${S.players.length} seated. Drag a token onto another seat to move it there.` : "Scan to take a seat."}</p>`;
+  }
+  if (S.phase === "setup") return `<h2>Setup</h2><p>Tap a token to change its character. Drag it to move its seat.</p>`;
+  if (S.phase === "night") return `<h2>Night ${S.night}</h2><p>${alive} alive. The glowing token is next to resolve.</p>`;
+  if (S.phase === "day") return `<h2>Day ${S.day}</h2><p>${alive} alive, ${S.threshold} votes to execute.</p>`;
+  return `<h2 class="${S.winner}-text">${S.winner === "good" ? "Good" : "Evil"} wins</h2><p>${esc(S.win_reason)}</p>`;
+}
+
+const KIND = {townsfolk: "Townsfolk", outsider: "Outsider", minion: "Minion", demon: "Demon"};
+
+function roleDetails(p) {
+  const c = C[p.character];
+  if (!c) return "";
+  const status = [];
+  if (!p.alive) status.push(`dead, ${p.ghost_vote ? "vote left" : "vote used"}`);
+  if (S.poisoned === p.pid) status.push("poisoned");
+  if (S.protected === p.pid) status.push("protected by the Monk");
+  if (S.master === p.pid) status.push("the Butler's Master");
+  if (S.red_herring === p.pid) status.push("Fortune Teller's red herring");
+  let h = `<div class="details"><div class="role ${tone(p.character)}-text">${esc(c.name)}</div>
+    <div class="kind">${KIND[c.type]}, ${team(p.character)} team</div>
+    <p>${esc(c.ability)}</p>`;
+  if (p.believed && p.believed !== p.character) {
+    const b = C[p.believed];
+    h += `<div class="believed"><div class="kind">Thinks they are the ${esc(b.name)}. Their ability does not work.</div><p>${esc(b.ability)}</p></div>`;
+  }
+  if (status.length) h += `<div class="kind">Right now: ${esc(status.join(", "))}.</div>`;
+  return h + `</div>`;
+}
+
+function inspector() {
+  const p = S.players.find(x => x.pid === selected);
+  const i = S.players.indexOf(p);
+  const id = p.pid;
+  let body = "";
+  if (S.phase === "lobby" || S.phase === "setup") {
+    body += `<div class="acts"><button class="btn quiet small" onclick="act('move_player', {pid:${q(id)}, delta:-1})">Move anticlockwise</button>
+      <button class="btn quiet small" onclick="act('move_player', {pid:${q(id)}, delta:1})">Move clockwise</button></div>`;
+  }
+  if (S.phase === "lobby") body += `<div class="acts"><button class="btn quiet small" onclick="act('remove_player', {pid:${q(id)}})">Remove from the game</button></div>`;
+  if (S.phase === "setup") {
+    body += `<label class="field"><span>Character</span><select onchange="act('set_character', {pid:${q(id)}, character:this.value})">${charOpts(p.character)}</select></label>`;
+    if (p.character === "drunk") body += `<label class="field"><span>Believes they are</span><select onchange="act('set_character', {pid:${q(id)}, character:'drunk', believed:this.value})">${charOpts(p.believed, "townsfolk")}</select></label>`;
+    body += roleDetails(p);
+  }
+  if (S.phase === "night" || S.phase === "day") {
+    body += `${roleDetails(p)}
+      <div class="acts">
+        ${p.alive ? `<button class="btn quiet small" onclick="act('kill', {pid:${q(id)}})">Kill</button>` : `<button class="btn quiet small" onclick="act('revive', {pid:${q(id)}})">Bring back</button>`}
+        <button class="btn quiet small" onclick="act('set_poisoned', {pid:${S.poisoned === id ? "null" : q(id)}})">${S.poisoned === id ? "Cure poison" : "Poison"}</button>
+        ${!p.alive ? `<button class="btn quiet small" onclick="act('set_ghost_vote', {pid:${q(id)}, value:${!p.ghost_vote}})">${p.ghost_vote ? "Spend their vote" : "Return their vote"}</button>` : ""}
+      </div>
+      <label class="field"><span>Private message</span><textarea id="msg-${id}" placeholder="Only ${esc(p.name)} sees this"></textarea></label>
+      <div class="acts"><button class="btn small" onclick="act('message', {pid:${q(id)}, text: val('msg-${id}')}, 'msg-${id}')">${S.phase === "night" ? `Hold for ${esc(p.name)} until dawn` : `Send to ${esc(p.name)}`}</button>
+        ${S.phase === "night" && S.inbox ? `<button class="btn quiet small" onclick="act('message', {pid:${q(id)}, text: val('msg-${id}'), now: true}, 'msg-${id}')">Send now, silently</button>` : ""}</div>
+      <label class="field"><span>Change character</span><select id="ch-${id}">${charOpts(p.character)}</select></label>
+      <div class="acts"><button class="btn quiet small" onclick="act('set_character', {pid:${q(id)}, character: val('ch-${id}')}, 'ch-${id}')">Change character</button></div>`;
+  }
+  if (S.phase === "over") body += roleDetails(p);
+  return `<div class="inspector paper"><h3>${esc(p.name)} <button class="x" onclick="pick('${id}')" aria-label="Close">&times;</button></h3>
+    <div class="note">Seat ${i + 1}</div>${body}</div>`;
+}
+
+function lobby() {
+  const n = S.players.length;
+  return `<h2>Gather the players</h2>
+    <p class="lede">Everyone scans the code on the table, or opens ${esc(S.join_url)} on their phone. Then drag the tokens so the circle matches how you are actually sitting, clockwise.</p>
+    <div class="field"><span>Someone without a phone</span>
+      <div class="line"><input id="add-name" placeholder="Their name"><button class="btn quiet small" onclick="act('add_player', {name: val('add-name')}, 'add-')">Seat them</button></div>
+      <p class="note">You will read their character and night info to them yourself.</p></div>
+    <h3>Deal</h3>
+    <p class="note">${n < 5 ? `Trouble Brewing needs at least 5 players. ${n} seated so far.` : `${n} players seated.`}</p>
+    <button class="btn" ${n >= 5 && n <= 15 ? "" : "disabled"} onclick="act('deal')">Deal characters</button>`;
+}
+
+function setup() {
+  const types = ["townsfolk", "outsider", "minion", "demon"];
+  const plural = {townsfolk: "Townsfolk", outsider: "Outsiders", minion: "Minions", demon: "Demon"};
+  const counts = types.map(t => `${S.players.filter(p => C[p.character]?.type === t).length} ${plural[t]}`).join(", ");
+  return `<h2>Check the deal</h2>
+    <p class="lede">${counts}. Tap any token to swap its character. Nobody sees anything until you start.</p>
+    ${S.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("")}
+    <label class="field"><span>Fortune Teller's red herring</span><select id="rh">${playerOpts(p => team(p.character) === "good", S.red_herring)}</select></label>
+    <div class="field"><span>Demon bluffs</span><div class="line">${[0, 1, 2].map(i => `<select id="bluff-${i}">${charOpts(S.bluffs[i])}</select>`).join("")}</div></div>
+    <button class="btn quiet small" onclick="act('set_setup', {red_herring: val('rh'), bluffs: [0,1,2].map(i => val('bluff-'+i))}, 'bluff-')">Save red herring and bluffs</button>
+    <h3>Begin</h3>
+    <div class="line"><button class="btn" onclick="act('start_game')">Start the first night</button>
+      <button class="btn quiet" onclick="act('deal', {}, 'bluff-')">Deal again</button></div>`;
+}
+
+function stepItem(s, i, cur) {
+  const title = s.key === "minion_info" ? "Minions meet the Demon" : s.key === "demon_info" ? "Demon meets the Minions" : cname(s.key);
+  const who = s.pids.map(pname).join(", ");
+  const open = (openStep ?? cur) === i;
+  const state = s.done ? "done" : !s.applies ? "skip" : i === cur ? "current" : "";
+  let h = `<li class="${state}"><button class="stephead" onclick="openStep = ${open ? -1 : i}; render()" aria-expanded="${open}">
+      <b>${esc(title)}</b><span>${esc(who)}${!s.applies && !s.done ? ", sleeps" : ""}</span></button>`;
+  if (!open) return h + `</li>`;
+  h += `<p class="note">${esc(HINTS[s.key] || "")}</p>`;
+  if (s.sent) h += `<p class="note">Held for dawn: <span class="answer">${esc(s.sent)}</span></p>`;
+  if (s.impaired) h += `<p><span class="flag">Drunk or poisoned</span> <span class="note">Their information may be false.</span></p>`;
+  if (s.choose) {
+    const status = s.answer ? `Picked on their phone: <span class="answer">${s.answer.map(pname).join(" and ")}</span>`
+      : s.asked ? "Waiting for their phone" : s.key === "ravenkeeper" ? "Prompted in the second round if they die" : "";
+    h += `<div class="line"><span class="note">${status}</span>${s.asked || s.answer ? `<button class="btn quiet small" onclick="act('ask', {step:${i}})">Ask again</button>` : ""}</div>
+      <div class="line">${[...Array(s.choose).keys()].map(k => `<select id="c-${i}-${k}" aria-label="Pick ${k + 1}">${playerOpts(() => true, s.answer?.[k] ?? s.choices[k], "Pick a player")}</select>`).join("")}</div>`;
+    if (s.key === "imp") {
+      h += `<label class="field"><span>If the Mayor is attacked, kill instead</span><select id="c-${i}-redirect">${playerOpts(p => p.alive, "", "Nobody, the Mayor dies")}</select></label>
+        <label class="field"><span>If the Imp picks themselves, the new Imp is</span><select id="c-${i}-heir">${playerOpts(p => p.alive && C[p.character]?.type === "minion", "", "Scarlet Woman first, else random")}</select></label>`;
+    }
+  }
+  const args = `{step:${i}, choices:[${[...Array(s.choose).keys()].map(k => `val('c-${i}-${k}')`).join(",")}]` +
+    (s.key === "imp" ? `, redirect: val('c-${i}-redirect') || null, new_demon: val('c-${i}-heir') || null` : "") + "}";
+  h += `<div class="line"><button class="btn small" onclick="act('resolve', ${args}, 't-${i}')">${s.choose ? "Apply their pick" : "Work out their info"}</button>
+    <button class="btn quiet small" onclick="openStep = null; act('finish_step', {step:${i}, done:${!s.done}})">${s.done ? "Reopen" : "Skip"}</button></div>`;
+  if (s.suggestion !== null) {
+    h += `<label class="field"><span>What they learn (edit if they are drunk, poisoned, or someone misregisters)</span><textarea id="t-${i}">${esc(s.suggestion)}</textarea></label>
+      <button class="btn small" onclick="openStep = null; act('send', {step:${i}, text: val('t-${i}')}, 't-${i}')">Hold for ${esc(who)} until dawn</button>`;
+  }
+  return h + `</li>`;
+}
+
+function night() {
+  const cur = currentStep();
+  const deaths = S.night_deaths.map(pname);
+  const held = Object.values(S.queued).reduce((n, texts) => n + texts.length, 0);
+  const round2 = S.night > 1 ? `<h3>Second round</h3>
+    ${S.second_round_done
+      ? `<p class="note">Every phone has buzzed a second time.</p>`
+      : `<p class="note">Applying the Imp's kill buzzes every phone again, and a Ravenkeeper killed tonight gets their prompt. The second round happens every night so it gives nothing away.</p>
+         <button class="btn quiet small" onclick="act('second_round')">Buzz every phone now</button>`}` : "";
+  return `<h2>Night ${S.night}</h2>
+    <p class="lede">Every phone has buzzed. Players with a choice are picking; everyone else has a button to tap. Work down the list as their picks arrive.</p>
+    ${S.phones_done ? `<p class="note"><span class="answer">${S.phones_done[0]} of ${S.phones_done[1]} phones done.</span> Wait for everyone before the next round so nobody is left tapping alone.</p>` : ""}
+    ${S.steps.length ? `<ol class="order">${S.steps.map((s, i) => stepItem(s, i, cur)).join("")}</ol>` : `<p class="note">Nobody has anything to do tonight.</p>`}
+    ${round2}
+    <h3>Dawn</h3>
+    <p class="note">${deaths.length ? `${esc(deaths.join(" and "))} will be announced dead.` : "Nobody has died tonight."}
+      ${held ? `${held} ${held === 1 ? "message is" : "messages are"} held for dawn.` : ""} Everyone else gets "Nothing to report tonight."</p>
+    <button class="btn" onclick="openStep = null; act('start_day')">Deliver everything and start day ${S.day + 1}</button>`;
+}
+
+function toggleVote(i, pid) {
+  const set = voteDraft[i];
+  set.has(pid) ? set.delete(pid) : set.add(pid);
+  render();
+}
+
+function day() {
+  const noms = S.nominations_full.map((n, i) => {
+    voteDraft[i] ??= new Set(n.voters);
+    const eligible = S.players.filter(p => p.alive || p.ghost_vote || n.voters.includes(p.pid));
+    const enough = n.votes !== null && n.votes >= S.threshold;
+    return `<div class="nom"><div class="line"><span class="tally ${enough ? "enough" : ""}">${esc(pname(n.nominator))} nominates ${esc(pname(n.nominee))}</span>
+        ${n.votes !== null ? `<span class="note">${n.votes} ${n.votes === 1 ? "vote" : "votes"}${enough ? ", enough to execute" : ""}</span>` : ""}</div>
+      <div class="chips">${eligible.map(p => `<button class="chip ${p.alive ? "" : "ghost"}" aria-pressed="${voteDraft[i].has(p.pid)}" onclick="toggleVote(${i}, '${p.pid}')">${esc(p.name)}</button>`).join("")}</div>
+      <button class="btn quiet small" onclick="act('record_votes', {nomination:${i}, voters:[...voteDraft[${i}]]}).then(() => delete voteDraft[${i}])">Record ${voteDraft[i].size} ${voteDraft[i].size === 1 ? "vote" : "votes"}</button></div>`;
+  }).join("");
+  const butler = S.master ? `<p class="note">The Butler may only vote when ${esc(pname(S.master))} votes.</p>` : "";
+  return `<h2>Day ${S.day}</h2>
+    <p class="lede">${S.threshold} votes execute. Dashed names are dead and spend their only vote.</p>
+    <ul class="crier">${S.announcements.map(a => `<li>${esc(a)}</li>`).join("")}</ul>
+    <h3>Nominations</h3>
+    <div class="line"><select id="nom-a" aria-label="Nominator">${playerOpts(p => p.alive, "", "Who nominates")}</select>
+      <select id="nom-b" aria-label="Nominee">${playerOpts(p => p.alive, "", "Who is nominated")}</select></div>
+    <label class="line note"><input type="checkbox" id="nom-spy"> A Spy nominating the Virgin registers as Townsfolk</label>
+    <button class="btn small" onclick="act('nominate', {nominator: val('nom-a'), nominee: val('nom-b'), spy_as_townsfolk: val('nom-spy')}, 'nom-')">Nominate</button>
+    ${butler}${noms}
+    <h3>Slayer claim</h3>
+    <div class="line"><select id="sl-a" aria-label="Shooter">${playerOpts(p => p.alive, "", "Who shoots")}</select>
+      <select id="sl-b" aria-label="Target">${playerOpts(p => p.alive, "", "At whom")}</select></div>
+    <label class="line note"><input type="checkbox" id="sl-rec"> The Recluse registers as the Demon</label>
+    <button class="btn quiet small" onclick="act('slayer_shot', {shooter: val('sl-a'), target: val('sl-b'), recluse_as_demon: val('sl-rec')}, 'sl-')">Resolve the shot</button>
+    <h3>Dusk</h3>
+    <p class="note">Executes the top nominee if they reached ${S.threshold} votes without a tie, then night falls.</p>
+    <button class="btn" onclick="Object.keys(voteDraft).forEach(k => delete voteDraft[k]); act('end_day')">End the day</button>`;
+}
+
+function over() {
+  return `<h2 class="verdict ${S.winner}-text">${S.winner === "good" ? "Good" : "Evil"} wins</h2>
+    <p class="lede">${esc(S.win_reason)} Every character is now revealed on players' phones.</p>
+    <button class="btn" onclick="selected = null; act('reset')">New game, same players</button>`;
+}
+
+function tools() {
+  if (S.phase !== "night" && S.phase !== "day") return "";
+  return `<details class="tools" ${toolsOpen ? "open" : ""} ontoggle="toolsOpen = this.open"><summary>End the game early</summary>
+    <div class="line"><button class="btn quiet small" onclick="act('declare_winner', {team:'good'})">Good wins</button>
+      <button class="btn quiet small" onclick="act('declare_winner', {team:'evil'})">Evil wins</button></div>
+    <p class="note">Bluffs: ${S.bluffs.map(cname).join(", ")}. Virgin ${S.virgin_spent ? "used" : "unused"}, Slayer ${S.slayer_spent ? "used" : "unused"}.</p></details>`;
+}
+
+// notes are only sent by servers that support them; older servers omit S.inbox entirely
+function inbox() {
+  if (!S.inbox?.length) return "";
+  const unread = S.inbox.filter(n => !n.read).length;
+  const items = S.inbox.map((n, i) => ({...n, i})).reverse().map(n => `<li class="${n.read ? "" : "unread"}">
+      <b>${esc(pname(n.pid))}</b> <span class="note">${esc(n.label)}</span><p>${esc(n.text)}</p>
+      <button class="btn quiet small" onclick="selected = '${n.pid}'; render(); el('msg-${n.pid}')?.focus()">Reply to ${esc(pname(n.pid))}</button></li>`).join("");
+  return `<details class="inbox" ${unread || inboxOpen ? "open" : ""} ontoggle="inboxOpen = this.open">
+    <summary>Notes from players${unread ? `, ${unread} new` : ""}</summary>
+    <ul class="notes">${items}</ul>
+    ${unread ? `<button class="btn small" onclick="act('read_inbox')">Mark all as read</button>` : ""}</details>`;
+}
+
+function logBlock() {
+  if (!S.log.length) return "";
+  return `<details class="log" ${logOpen ? "open" : ""} ontoggle="logOpen = this.open"><summary>Everything that has happened</summary>
+    <ol reversed>${S.log.slice().reverse().map(l => `<li>${esc(l)}</li>`).join("")}</ol></details>`;
+}
+
+api("/api/characters").then(c => { C = c; lastVersion = -1; poll(); });
+setInterval(poll, 1200);
+</script>
+</body>
+</html>
