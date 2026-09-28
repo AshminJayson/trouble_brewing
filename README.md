@@ -37,6 +37,9 @@ If phones cannot connect, allow incoming connections for Python in the laptop's 
 
 Tap any token during play to kill, revive, poison, send a private message or change a character.
 
+**Undo** (top of the Storyteller screen, or Ctrl/Cmd+Z) reverses the last Storyteller action, up to 30 back. It
+warns when phones already showed the result or when picks made on phones since would be cleared.
+
 ## Files
 
 - `roles.py` character data, setup table and night order

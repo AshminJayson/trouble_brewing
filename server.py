@@ -11,6 +11,7 @@ Run: uv run server.py [--port 8000]
 """
 
 import argparse
+import json
 import secrets
 import socket
 import threading
@@ -34,7 +35,22 @@ ST_ACTIONS = {
     "add_player", "remove_player", "move_player", "deal", "set_character", "set_setup", "start_game",
     "ask", "resolve", "second_round", "send", "finish_step", "message", "start_day", "nominate", "record_votes",
     "slayer_shot", "end_day", "read_inbox", "kill", "revive", "set_poisoned", "set_ghost_vote", "declare_winner", "reset",
+    "undo",
 }
+
+
+# undo-button text per action; {name} is the player named by the body's pid
+ACTION_LABELS = {
+    "add_player": "Seat {body_name}", "remove_player": "Remove {name}", "move_player": "Move {name}",
+    "deal": "Deal characters", "set_character": "Change {name}'s character", "set_setup": "Save red herring and bluffs",
+    "start_game": "Start the game", "ask": "Ask again", "resolve": "Work out a night step", "second_round": "Second buzz",
+    "send": "Hold info for dawn", "finish_step": "Skip or reopen a night step", "message": "Message {name}",
+    "start_day": "Start the day", "nominate": "Nomination", "record_votes": "Record votes", "slayer_shot": "Slayer shot",
+    "end_day": "End the day", "kill": "Kill {name}", "revive": "Bring back {name}", "set_poisoned": "Change poison",
+    "set_ghost_vote": "Change {name}'s ghost vote", "declare_winner": "End the game", "reset": "Reset to the lobby",
+}
+# not undoable: marking notes read, and undo itself
+NO_UNDO = {"read_inbox", "undo"}
 
 
 class JoinBody(BaseModel):
@@ -86,6 +102,16 @@ def create_app(game: Game, st_key: str, join_url: str) -> FastAPI:
     def check_key(key: str) -> None:
         if key != st_key:
             raise GameError("Wrong storyteller key")
+
+    def action_label(action: str, body: dict) -> str:
+        pid = body.get("pid")
+        name = next((p.name for p in game.players if p.pid == pid), "a player")
+        return ACTION_LABELS[action].format(name=name, body_name=body.get("name", "a player"))
+
+    def phone_view() -> str:
+        # exactly what each phone receives, minus the version counter
+        views = [{k: x for k, x in game.player_view(p.token).items() if k != "version"} for p in game.players]
+        return json.dumps(views, sort_keys=True, default=str)
 
     def st_state() -> dict:
         return {**game.storyteller_view(), "join_url": join_url}
@@ -158,10 +184,14 @@ def create_app(game: Game, st_key: str, join_url: str) -> FastAPI:
             check_key(key)
             if action not in ST_ACTIONS:
                 raise GameError(f"Unknown action {action}")
+            before = None if action in NO_UNDO else game.snapshot()
+            shown = phone_view()
             try:
                 getattr(game, action)(**body)
             except TypeError as e:
                 raise GameError(f"Bad arguments for {action}: {e}") from e
+            if before is not None:
+                game.push_undo(action_label(action, body), before, seen=phone_view() != shown)
             game.version += 1
             return st_state()
 

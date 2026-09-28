@@ -475,3 +475,75 @@ def test_start_refuses_bluff_put_in_play_after_saving():
     assert g.storyteller_view()["bluff_problems"]
     with pytest.raises(GameError, match="must not be in play"):
         g.start_game()
+
+
+# --- undo ---
+
+def undoable(g: Game, action: str, *args, label: str = "x", **kwargs) -> None:
+    """Run a Storyteller action the way the server does: snapshot first, push on success."""
+    before = g.snapshot()
+    getattr(g, action)(*args, **kwargs)
+    g.push_undo(label, before, seen=False)
+
+
+def test_undo_reverses_a_kill_and_logs_it():
+    g = make(["imp", "baron", "chef", "empath", "monk", "saint", "soldier"])
+    to_night2(g)
+    asha = p(g, "Asha")
+    undoable(g, "kill", asha.pid, label="Kill Asha")
+    assert not p(g, "Asha").alive
+    assert g.undo_info()["label"] == "Kill Asha"
+    g.undo()
+    assert p(g, "Asha").alive
+    assert g.undo_info() is None
+    assert g.log[-1].endswith("Storyteller undid: Kill Asha")
+
+
+def test_undo_with_empty_history_refuses():
+    with pytest.raises(GameError, match="Nothing to undo"):
+        Game().undo()
+
+
+def test_undo_keeps_buzz_notes_and_counts_lost_phone_picks():
+    g = make(["imp", "baron", "chef", "empath", "monk", "saint", "soldier"])
+    buzz = g.buzz
+    undoable(g, "start_day")
+    g.note_to_storyteller(p(g, "Ben").token, "Is the Saint safe?")
+    g.undo()
+    assert g.phase == "night"
+    assert g.buzz == buzz + 1, "undo must not lower the buzz, or phones would buzz again"
+    assert g.inbox[-1]["text"] == "Is the Saint safe?"
+
+    undoable(g, "kill", p(g, "Gita").pid)
+    tapper = next(x for x in g.players if x.prompt and x.prompt["kind"] == "tap" and not x.prompt["answer"])
+    g.tap(tapper.token, tapper.prompt["target"])
+    assert g.undo_info()["phone_picks"] == 1
+
+
+def test_undo_in_lobby_keeps_players_who_joined_since():
+    g = Game(random.Random(1))
+    for n in NAMES[:5]:
+        g.add_player(n)
+    undoable(g, "move_player", g.players[0].pid, 1)
+    late = g.add_player("Zed")
+    g.undo()
+    assert [x.name for x in g.players] == NAMES[:5] + ["Zed"]
+    assert g.add_player("Yan").pid != late.pid
+
+
+def test_undo_history_is_capped():
+    g = Game(random.Random(1))
+    for n in NAMES[:5]:
+        g.add_player(n)
+    for _ in range(Game.UNDO_DEPTH + 5):
+        undoable(g, "move_player", g.players[0].pid, 1)
+    assert g.undo_info()["depth"] == Game.UNDO_DEPTH
+
+
+def test_night_kill_does_not_move_public_threshold():
+    g = make(["imp", "baron", "chef", "empath", "monk", "saint", "soldier"])
+    before = g.public_view()["threshold"]
+    g.kill(p(g, "Gita").pid)
+    assert g.public_view()["threshold"] == before
+    g.start_day()
+    assert g.public_view()["threshold"] == g.threshold()

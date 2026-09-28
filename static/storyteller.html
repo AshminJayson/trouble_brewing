@@ -15,6 +15,8 @@
   .table header { display: flex; align-items: baseline; gap: 1rem; }
   .table header h1 { font-size: var(--t-2xl); color: var(--accent-text); }
   .table header span { color: var(--on-felt-dim); font-size: var(--t-sm); }
+  .table header .undo { margin-left: auto; display: flex; align-items: baseline; gap: 0.6rem; }
+  .table header .undo .cost { color: var(--accent-text); max-width: 18rem; text-align: right; }
   .square {
     container-type: size;
     position: relative;
@@ -114,7 +116,7 @@
 </head>
 <body>
 <div class="layout">
-  <div class="table"><header><h1>Trouble Brewing</h1><span id="sub"></span></header><div class="square" id="square"></div></div>
+  <div class="table"><header><h1>Trouble Brewing</h1><span id="sub"></span><div class="undo" id="undo"></div></header><div class="square" id="square"></div></div>
   <aside class="ledger paper" id="ledger"></aside>
 </div>
 <div id="toast" role="status"></div>
@@ -201,6 +203,15 @@ function bluffOpts(chosen) {
     .map(([id, c]) => [id, c.name]), chosen);
 }
 
+function undoButton() {
+  const u = S.undo;
+  if (!u) return "";
+  const cost = [u.seen ? "phones already showed this" : "",
+    u.phone_picks ? `clears ${u.phone_picks} ${u.phone_picks === 1 ? "pick" : "picks"} made on phones since` : ""].filter(Boolean).join("; ");
+  return `<button class="btn quiet small" onclick="act('undo')" title="Ctrl or Cmd + Z">Undo: ${esc(u.label)}</button>
+    ${cost ? `<span class="cost">${esc(cost[0].toUpperCase() + cost.slice(1))}.</span>` : ""}`;
+}
+
 function currentStep() {
   if (S.phase !== "night") return -1;
   return S.steps.findIndex(s => !s.done && s.applies);
@@ -226,6 +237,7 @@ function render() {
   if (selected && !S.players.some(p => p.pid === selected)) selected = null;
   const alive = S.players.filter(p => p.alive).length;
   const unread = (S.inbox || []).filter(n => !n.read).length;
+  el("undo").innerHTML = undoButton();
   el("sub").textContent = (S.players.length ? `${alive} of ${S.players.length} alive` : "") + (unread ? `, ${unread} new ${unread === 1 ? "note" : "notes"}` : "");
   el("square").innerHTML = square();
   fitNames(el("square"));
@@ -542,6 +554,13 @@ function logBlock() {
 api("/api/characters").then(c => { C = c; lastVersion = -1; poll(); });
 setInterval(poll, 1200);
 addEventListener("resize", () => fitNames(el("square")));
+addEventListener("keydown", e => {
+  // leave text fields their own undo
+  if (e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) || !S?.undo) return;
+  e.preventDefault();
+  act("undo");
+});
 </script>
 </body>
 </html>

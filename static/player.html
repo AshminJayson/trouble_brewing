@@ -7,7 +7,20 @@
 <title>Trouble Brewing</title>
 <link rel="stylesheet" href="/static/theme.css">
 <style>
-  main { max-width: 30rem; margin: 0 auto; padding: 1rem 1.1rem 3rem; }
+  main { max-width: 30rem; margin: 0 auto; padding: 1rem 1.1rem calc(5rem + env(safe-area-inset-bottom)); }
+
+  /* --- bottom tabs, in thumb reach --- */
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; justify-content: center;
+    padding: 0 max(0.5rem, env(safe-area-inset-left)) env(safe-area-inset-bottom);
+    background: var(--felt-deep); border-top: 1px solid var(--felt-line);
+  }
+  .tabs button {
+    position: relative; flex: 1; max-width: 10rem; min-height: 3.2rem; border: 0; background: none; cursor: pointer;
+    color: var(--on-felt-dim); font-weight: 500; box-shadow: inset 0 2px 0 transparent;
+  }
+  .tabs button[aria-current="page"] { color: var(--accent-text); font-weight: 700; box-shadow: inset 0 2px 0 var(--brass); }
+  .tabs .fresh { position: absolute; top: 0.7rem; margin-left: 0.25rem; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--brass-bright); }
 
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 1.4rem; }
   .top h1 { font-size: var(--t-xl); color: var(--accent-text); }
@@ -82,7 +95,7 @@
   .verdict { margin-top: 1rem; padding: 1.2rem; border-radius: 14px; text-align: center; }
   .verdict h2 { font-size: var(--t-3xl); }
 
-  details.almanac summary { cursor: pointer; font-family: var(--display); font-size: var(--t-xl); }
+  .almanac > h2 { font-size: var(--t-xl); }
   .almanac h3 { font-size: var(--t-lg); margin: 1rem 0 0.3rem; color: var(--accent-text); }
   .almanac dl { margin: 0; }
   .almanac dt { font-family: var(--display); font-size: var(--t-lg); margin-top: 0.7rem; display: flex; align-items: center; gap: 0.45rem; }
@@ -100,7 +113,7 @@
 const $app = document.getElementById("app");
 let token = localStorage.getItem("tb_token");
 let state = null, chars = {}, lastVersion = -1;
-let revealed = false, picks = [], error = "", seen = Number(localStorage.getItem("tb_seen") || 0), hideTimer = null, almanacOpen = false, noteDraft = "", noteSent = false, tapError = "";
+let revealed = false, picks = [], error = "", seen = Number(localStorage.getItem("tb_seen") || 0), hideTimer = null, hideAt = 0, view = "character", heard = "", noteDraft = "", noteSent = false, tapError = "";
 let lastBuzz = localStorage.getItem("tb_buzz");
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -177,6 +190,7 @@ function togglePick(pid, count) {
 
 function flip() {
   revealed = !revealed;
+  view = "character";
   clearTimeout(hideTimer);
   if (revealed && state?.me) {
     seen = state.me.messages.length;
@@ -189,7 +203,20 @@ function flip() {
 function armHide() {
   clearTimeout(hideTimer);
   // hide again on its own so a phone left on the table does not give the role away
+  hideAt = Date.now() + 45000;
   hideTimer = setTimeout(() => { revealed = false; render(); }, 45000);
+}
+
+// ticks the countdown text in place; a full render would wipe a note being typed
+function tickHide() {
+  const e = document.getElementById("hide-in");
+  if (e) e.textContent = Math.max(0, Math.ceil((hideAt - Date.now()) / 1000));
+}
+
+function show(v) {
+  view = v;
+  scrollTo(0, 0);
+  render();
 }
 
 async function sendNote() {
@@ -243,7 +270,7 @@ function hero(me) {
         <div class="face front"><div class="token ${c}"><span class="char">${revealed ? glyph(r.id) + esc(r.name) : ""}</span></div></div>
       </div>
     </button>
-    <div class="hint">${revealed ? "Tap the token to hide it" : "Shield your screen, then tap to see your character"}</div>
+    <div class="hint">${revealed ? `Hides by itself in <span id="hide-in">${Math.max(0, Math.ceil((hideAt - Date.now()) / 1000))}</span>s. Tap the token to hide it now.` : "Shield your screen, then tap to see your character"}</div>
     ${revealed ? `<div class="ability"><div class="team ${c}-text">${TYPE_LABEL[r.type]}, ${t === "good" ? "on the good team" : "on the evil team"}</div><p>${esc(r.ability)}</p></div>` : ""}
   </div>`;
 }
@@ -282,7 +309,7 @@ function ring(s, me) {
 function almanac() {
   const groups = ["townsfolk", "outsider", "minion", "demon"].map(t => `<h3>${TYPE_LABEL[t]}</h3><dl>${
     Object.entries(chars).filter(([, c]) => c.type === t).map(([id, c]) => `<dt class="${tone(c.type)}-text">${glyph(id)}${esc(c.name)}</dt><dd>${esc(c.summary)}</dd>`).join("")}</dl>`).join("");
-  return `<section><details class="almanac" ${almanacOpen ? "open" : ""} ontoggle="almanacOpen = this.open"><summary>Every character in this script</summary>${groups}</details></section>`;
+  return `<section class="almanac"><h2>Every character in this script</h2>${groups}</section>`;
 }
 
 function setDaylight(phase) {
@@ -318,21 +345,29 @@ function render() {
   let html = `<div class="top"><h1>Trouble Brewing</h1><div class="when">${esc(me.name)}${me.alive ? "" : ", dead"}<br>${when(s)}</div></div>`;
   if (s.winner) html += `<div class="verdict paper"><h2 class="${s.winner}-text">${s.winner === "good" ? "Good" : "Evil"} wins</h2><p>${esc(s.win_reason)}</p></div>`;
   if (nudge) html += `<button class="call" onclick="flip()"><b>${s.phase === "night" ? `Night ${s.night}` : "Dawn"}</b>Everyone does this: shield your screen and open your token.</button>`;
-  html += hero(me);
-
-  if (revealed) {
-    html += `<section><h2>From the Storyteller</h2>${prompt(s, me)}${
-      me.messages.length ? me.messages.slice().reverse().map(m => `<div class="slip paper"><span class="when">${esc(m.label)}</span>${esc(m.text)}</div>`).join("")
-                         : `<p class="empty">Nothing yet. Anything you learn at night appears here.</p>`}</section>`;
-    if (me.notes) html += noteBox(me);
-  }
   if (error) html += `<p class="err">${esc(error)}</p>`;
 
-  html += `<section><h2>Town square</h2>${ring(s, me)}${counts}</section>`;
-  if (s.announcements.length) {
-    html += `<section><h2>${s.phase === "day" ? "Today" : "Last heard"}</h2><ul class="crier">${s.announcements.map(a => `<li>${esc(a)}</li>`).join("")}</ul></section>`;
+  const news = JSON.stringify(s.announcements);
+  if (view === "square") heard = news;
+  if (view === "character") {
+    html += hero(me);
+    if (revealed) {
+      html += `<section><h2>From the Storyteller</h2>${prompt(s, me)}${
+        me.messages.length ? me.messages.slice().reverse().map(m => `<div class="slip paper"><span class="when">${esc(m.label)}</span>${esc(m.text)}</div>`).join("")
+                           : `<p class="empty">Nothing yet. Anything you learn at night appears here.</p>`}</section>`;
+      if (me.notes) html += noteBox(me);
+    }
+  } else if (view === "square") {
+    html += `<section><h2>Town square</h2>${ring(s, me)}${counts}</section>`;
+    if (s.announcements.length) {
+      html += `<section><h2>${s.phase === "day" ? "Today" : "Last heard"}</h2><ul class="crier">${s.announcements.map(a => `<li>${esc(a)}</li>`).join("")}</ul></section>`;
+    }
+  } else {
+    html += almanac();
   }
-  html += almanac();
+
+  const tab = (v, label, fresh) => `<button onclick="show('${v}')" ${view === v ? 'aria-current="page"' : ""}>${label}${fresh ? `<span class="fresh" aria-label="new"></span>` : ""}</button>`;
+  html += `<nav class="tabs">${tab("character", "Character", view !== "character" && nudge)}${tab("square", "Town square", s.announcements.length && news !== heard)}${tab("almanac", "Almanac")}</nav>`;
   $app.innerHTML = html;
   fitNames($app);
 }
@@ -340,6 +375,7 @@ function render() {
 api("/api/characters").then(c => { chars = c; render(); });
 poll();
 setInterval(poll, 1500);
+setInterval(tickHide, 1000);
 </script>
 </body>
 </html>

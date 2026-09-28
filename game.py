@@ -6,6 +6,7 @@ with the player's secret token). Invalid actions raise GameError with a message 
 
 from __future__ import annotations
 
+import copy
 import math
 import random
 import secrets
@@ -53,6 +54,10 @@ class Game:
         self.players: list[Player] = []
         self.version = 0
         self._next_pid = 1
+        # storyteller undo stack: [{"label", "seen", "state", "phone_inputs"}], newest last
+        self.history: list[dict] = []
+        # picks and taps made on phones; undo reports how many it throws away
+        self.phone_inputs = 0
         self._reset_round()
 
     def _reset_round(self) -> None:
@@ -552,6 +557,7 @@ class Game:
         p.prompt["answer"] = choices
         if p.prompt["step"] is not None:
             self.steps[p.prompt["step"]]["answer"] = choices
+        self.phone_inputs += 1
 
     def tap(self, token: str, option: str) -> None:
         """Player completes their tap task by pressing the button matching the target."""
@@ -561,6 +567,7 @@ class Game:
         if option != p.prompt["target"]:
             raise GameError(f"That one says {option}. Tap {p.prompt['target']}.")
         p.prompt["answer"] = option
+        self.phone_inputs += 1
 
     def note_to_storyteller(self, token: str, text: str) -> None:
         """Player sends a private note to the Storyteller (any phase, alive or dead)."""
@@ -771,6 +778,58 @@ class Game:
         """Back to the lobby with the same seated players."""
         self._reset_round()
 
+    # --- undo ---
+
+    UNDO_DEPTH = 30
+    # survive an undo: counters phones compare, notes players wrote, the record of what happened
+    _KEPT_ON_UNDO = ("version", "buzz", "inbox", "log", "history", "_next_pid", "phone_inputs")
+
+    def snapshot(self) -> dict:
+        """Deep copy of everything an undo restores (all state except _KEPT_ON_UNDO)."""
+        return copy.deepcopy({k: v for k, v in self.__dict__.items() if k not in self._KEPT_ON_UNDO})
+
+    def push_undo(self, label: str, state: dict, seen: bool) -> None:
+        """Record the state from before a Storyteller action so undo() can return to it.
+
+        Args:
+            label (str): what the action did, e.g. "Kill Asta".
+            state (dict): snapshot() taken just before the action ran.
+            seen (bool): the action already reached phones (buzz, dawn slips, a sent message).
+        """
+        self.history.append({"label": label, "seen": seen, "state": state, "phone_inputs": self.phone_inputs})
+        del self.history[:-self.UNDO_DEPTH]
+
+    def undo_info(self) -> dict | None:
+        """The action undo() would reverse.
+
+        Schema: {"label": str, "seen": bool, "phone_picks": int (picks and taps made since), "depth": int}
+        or None when there is nothing to undo.
+        """
+        if not self.history:
+            return None
+        top = self.history[-1]
+        return {"label": top["label"], "seen": top["seen"],
+                "phone_picks": self.phone_inputs - top["phone_inputs"], "depth": len(self.history)}
+
+    def undo(self) -> None:
+        """Reverse the most recent Storyteller action.
+
+        Algorithm: pop the newest history entry and restore its snapshot over the current state.
+        Fields in _KEPT_ON_UNDO are left alone, so phones do not buzz again, player notes stay and
+        pids are never reused. Players who joined the lobby since the snapshot are re-seated at the
+        end rather than dropped. Picks and taps made on phones since then are lost; undo_info()
+        reports how many beforehand.
+        """
+        if not self.history:
+            raise GameError("Nothing to undo")
+        entry = self.history.pop()
+        restored = {p.pid for p in entry["state"]["players"]}
+        joined = [p for p in self.players if p.pid not in restored]
+        self.__dict__.update(entry["state"])
+        if self.phase == "lobby":
+            self.players += joined
+        self._log(f"Storyteller undid: {entry['label']}")
+
     # --- views ---
 
     def public_view(self) -> dict:
@@ -785,7 +844,9 @@ class Game:
         over = self.phase == "over"
         return {
             "version": self.version, "phase": self.phase, "night": self.night, "day": self.day,
-            "counts": self.counts, "threshold": self.threshold(), "buzz": self.buzz,
+            "counts": self.counts, "buzz": self.buzz,
+            # from the public alive count, so a night kill does not show early
+            "threshold": math.ceil(sum(self._publicly_alive(p) for p in self.players) / 2),
             "seats": [{"pid": p.pid, "name": p.name, "alive": self._publicly_alive(p), "ghost_vote": p.ghost_vote,
                        "character": p.character if over else None} for p in self.players],
             "announcements": self.announcements,
@@ -817,7 +878,7 @@ class Game:
         slayer_spent, executed_today, night_deaths, steps (with applies / impaired / answer added),
         nominations_full, queued {pid: [text]}, second_round_done, inbox [{pid, text, label, read}],
         phones_done [done, total],
-        warnings, log.
+        warnings, log, bluff_problems [str], undo (see undo_info).
         """
         steps = []
         for i, s in enumerate(self.steps):
@@ -835,7 +896,7 @@ class Game:
             "night_deaths": self.night_deaths, "steps": steps, "nominations_full": self.nominations,
             "queued": {pid: texts for pid, texts in self.queued.items()}, "second_round_done": self.second_round_done,
             "inbox": self.inbox, "phones_done": list(self.phones_done()),
-            "warnings": self.setup_warnings(), "log": self.log,
+            "warnings": self.setup_warnings(), "log": self.log, "undo": self.undo_info(),
             "bluff_problems": self.bluff_problems(self.bluffs) if self.phase == "setup" else [],
         }
 
